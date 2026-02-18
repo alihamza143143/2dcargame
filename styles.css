@@ -71,11 +71,12 @@ body {
 }
 
 .email-card {
-    background: rgba(255, 255, 255, 0.95);
+    background: rgba(255, 255, 255,0.5);
     backdrop-filter: blur(10px);
     border-radius: 20px;
     padding: 50px;
     max-width: 480px;
+    opacity: 10;
     width: 90%;
     box-shadow: 0 25px 80px rgba(0, 0, 0, 0.3);
     text-align: center;
@@ -86,12 +87,12 @@ body {
 
 .email-header h1 {
     font-size: 2.2rem;
-    color: #2d3748;
+    color: #261d1d;
     margin-bottom: 10px;
 }
 
 .email-header p {
-    color: #718096;
+    color: #261d1d;
     font-size: 1rem;
     margin-bottom: 30px;
 }
@@ -104,7 +105,7 @@ body {
 .form-group label {
     display: block;
     font-weight: 600;
-    color: #4a5568;
+    color: #261d1d;
     margin-bottom: 8px;
     font-size: 0.95rem;
 }
@@ -141,7 +142,7 @@ body {
     align-items: center;
     cursor: pointer;
     padding: 10px 0;
-    color: #4a5568;
+    color: #261d1d;
     font-size: 0.95rem;
 }
 
@@ -186,7 +187,7 @@ body {
 .privacy-note {
     margin-top: 20px;
     font-size: 0.8rem;
-    color: #a0aec0;
+    color: #261d1d;
 }
 
 /* === PROFILE SELECTION SCREEN === */
@@ -200,13 +201,13 @@ body {
 }
 
 .profile-container h2 {
-    color: white;
+    color: #261d1d;
     font-size: 2rem;
     margin-bottom: 10px;
 }
 
 .profile-container > p {
-    color: #a0aec0;
+    color: #261d1d;
     font-size: 1.1rem;
     margin-bottom: 40px;
 }
@@ -240,13 +241,13 @@ body {
 }
 
 .profile-card h3 {
-    color: #2d3748;
+    color: #261d1d;
     font-size: 1.2rem;
     margin-bottom: 8px;
 }
 
 .profile-card p {
-    color: #718096;
+    color: #261d1d;
     font-size: 0.9rem;
     line-height: 1.4;
 }
@@ -328,14 +329,14 @@ body {
 }
 
 .scenario-card h2 {
-    color: #2d3748;
+    color: #261d1d;
     font-size: 1.4rem;
     margin-bottom: 10px;
     font-weight: 700;
 }
 
 .scenario-card p {
-    color: #4a5568;
+    color: #261d1d;
     font-size: 0.95rem;
     line-height: 1.6;
 }
@@ -392,7 +393,7 @@ body {
 }
 
 .option-text {
-    color: #2d3748;
+    color: #261d1d;
     font-size: 0.9rem;
     line-height: 1.5;
 }
@@ -459,7 +460,7 @@ body {
 }
 
 .feedback-text {
-    color: #2d3748;
+    color: #261d1d;
     font-size: 1.1rem;
     line-height: 1.5;
     margin-bottom: 20px;
@@ -512,7 +513,7 @@ body {
 }
 
 .end-card h1 {
-    color: #2d3748;
+    color: #261d1d;
     font-size: 2rem;
     margin-bottom: 25px;
 }
@@ -533,12 +534,12 @@ body {
 
 .score-label {
     font-size: 1.1rem;
-    color: #718096;
+    color: #261d1d;
     margin-top: 5px;
 }
 
 .end-message {
-    color: #4a5568;
+    color: #261d1d;
     font-size: 1.1rem;
     line-height: 1.6;
     margin-bottom: 30px;
@@ -568,7 +569,7 @@ body {
     width: 100%;
     padding: 14px 30px;
     background: transparent;
-    color: #718096;
+    color: #261d1d;
     border: 2px solid #e2e8f0;
     border-radius: 10px;
     font-size: 1rem;
@@ -580,7 +581,7 @@ body {
 .btn-secondary:hover {
     background: #f7fafc;
     border-color: #cbd5e0;
-    color: #4a5568;
+    color: #261d1d;
 }
 
 /* === ANIMATIONS === */
