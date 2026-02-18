@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estate Planning Journey | Johnson McGinnis</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+    <!-- 3D Game Container -->
+    <div id="game-container"></div>
+
+    <!-- Screen: Email Capture -->
+    <div id="screen-email" class="screen active">
+        <div class="email-card">
+            <div class="email-header">
+                <h1>Choose Your Path</h1>
+                <p>An interactive journey through life's important decisions</p>
+            </div>
+            <form id="email-form">
+                <div class="form-group">
+                    <label for="email">Enter your email to begin</label>
+                    <input type="email" id="email" name="email" placeholder="your@email.com" required>
+                    <span class="error-message" id="email-error"></span>
+                </div>
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="over18" name="over18">
+                        <span class="checkmark"></span>
+                        I am over 18 years old
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="inTennessee" name="inTennessee">
+                        <span class="checkmark"></span>
+                        I am located in Tennessee
+                    </label>
+                </div>
+                <div class="g-recaptcha" data-sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"></div>
+                <button type="submit" class="btn-primary">Start Your Journey</button>
+            </form>
+            <p class="privacy-note">Your information is secure and will not be shared.</p>
+        </div>
+    </div>
+
+    <!-- Screen: Profile Selection -->
+    <div id="screen-profile" class="screen">
+        <div class="profile-container">
+            <h2>Who are you?</h2>
+            <p>Select the option that best describes you</p>
+            <div class="profile-cards">
+                <div class="profile-card" data-profile="senior">
+                    <div class="profile-icon">👤</div>
+                    <h3>Senior</h3>
+                    <p>I'm planning for my own future</p>
+                </div>
+                <div class="profile-card" data-profile="child">
+                    <div class="profile-icon">👥</div>
+                    <h3>Child of Senior</h3>
+                    <p>I'm helping my parent plan</p>
+                </div>
+                <div class="profile-card" data-profile="other">
+                    <div class="profile-icon">🏠</div>
+                    <h3>Other</h3>
+                    <p>I'm interested in learning more</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Screen: Game HUD -->
+    <div id="screen-hud" class="screen">
+        <!-- Progress Dots -->
+        <div class="progress-dots">
+            <span class="dot" data-index="0"></span>
+            <span class="dot" data-index="1"></span>
+            <span class="dot" data-index="2"></span>
+            <span class="dot" data-index="3"></span>
+            <span class="dot" data-index="4"></span>
+            <span class="dot" data-index="5"></span>
+        </div>
+
+        <!-- Scenario Card -->
+        <div class="scenario-card" id="scenario-card">
+            <div class="scenario-badge">Scenario <span id="scenario-num">1</span> of 6</div>
+            <h2 id="scenario-title">Loading...</h2>
+            <p id="scenario-description">Loading scenario...</p>
+        </div>
+
+        <!-- Option Cards -->
+        <div class="options-container" id="options-container">
+            <div class="option-card option-left" data-direction="left">
+                <div class="option-header">Option A</div>
+                <p class="option-text" id="option-a-text">Option A text</p>
+            </div>
+            <div class="option-card option-center" data-direction="straight">
+                <div class="option-header">Option B</div>
+                <p class="option-text" id="option-b-text">Option B text</p>
+            </div>
+            <div class="option-card option-right" data-direction="right">
+                <div class="option-header">Option C</div>
+                <p class="option-text" id="option-c-text">Option C text</p>
+            </div>
+        </div>
+
+        <!-- Feedback Toast -->
+        <div class="feedback-toast" id="feedback-toast">
+            <div class="feedback-icon" id="feedback-icon">✓</div>
+            <p class="feedback-text" id="feedback-text">Good choice!</p>
+        </div>
+    </div>
+
+    <!-- Screen: End/Results -->
+    <div id="screen-end" class="screen">
+        <div class="end-card">
+            <div class="end-icon">🏁</div>
+            <h1 id="end-title">Journey Complete!</h1>
+            <div class="score-display">
+                <span class="score-value" id="score-value">0</span>
+                <span class="score-label">out of 6 correct</span>
+            </div>
+            <p class="end-message" id="end-message">Your estate plan needs attention.</p>
+            <a href="https://johnsonmcginnis.com" target="_blank" class="btn-cta" id="cta-button">
+                Schedule a Consultation
+            </a>
+            <button class="btn-secondary" id="play-again">Play Again</button>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="config.js"></script>
+    <script src="scenarios.js"></script>
+    <script src="game.js"></script>
+    <script src="main.js"></script>
+</body>
+</html>

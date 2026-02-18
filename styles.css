@@ -1,0 +1,689 @@
+/* ============================================
+   JOHNSON McGINNIS - ESTATE PLANNING GAME
+   Styles for 3D Car Decision Game
+   ============================================ */
+
+/* === RESET & BASE === */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    background: #1a1a2e;
+}
+
+/* === 3D GAME CONTAINER === */
+#game-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+}
+
+#game-container canvas {
+    display: block;
+}
+
+/* === SCREENS (Overlays) === */
+.screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+}
+
+.screen.active {
+    display: flex;
+}
+
+/* === EMAIL CAPTURE SCREEN === */
+#screen-email {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.email-card {
+    background: white;
+    border-radius: 20px;
+    padding: 50px;
+    max-width: 480px;
+    width: 90%;
+    box-shadow: 0 25px 80px rgba(0, 0, 0, 0.3);
+    text-align: center;
+    animation: slideUp 0.6s ease-out;
+}
+
+.email-header h1 {
+    font-size: 2.2rem;
+    color: #2d3748;
+    margin-bottom: 10px;
+}
+
+.email-header p {
+    color: #718096;
+    font-size: 1rem;
+    margin-bottom: 30px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+.form-group label {
+    display: block;
+    font-weight: 600;
+    color: #4a5568;
+    margin-bottom: 8px;
+    font-size: 0.95rem;
+}
+
+.form-group input[type="email"] {
+    width: 100%;
+    padding: 15px 18px;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 1rem;
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.form-group input[type="email"]:focus {
+    outline: none;
+    border-color: #f5a623;
+    box-shadow: 0 0 0 4px rgba(245, 166, 35, 0.2);
+}
+
+.error-message {
+    color: #e53e3e;
+    font-size: 0.85rem;
+    margin-top: 6px;
+    display: block;
+}
+
+.checkbox-group {
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    padding: 10px 0;
+    color: #4a5568;
+    font-size: 0.95rem;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    margin-right: 12px;
+    cursor: pointer;
+    accent-color: #f5a623;
+}
+
+.g-recaptcha {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 20px;
+    transform: scale(0.9);
+    transform-origin: center;
+}
+
+.btn-primary {
+    width: 100%;
+    padding: 16px 30px;
+    background: linear-gradient(135deg, #f5a623 0%, #f6ad3c 100%);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(245, 166, 35, 0.4);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+.privacy-note {
+    margin-top: 20px;
+    font-size: 0.8rem;
+    color: #a0aec0;
+}
+
+/* === PROFILE SELECTION SCREEN === */
+#screen-profile {
+    background: rgba(0, 0, 0, 0.85);
+}
+
+.profile-container {
+    text-align: center;
+    animation: fadeIn 0.5s ease-out;
+}
+
+.profile-container h2 {
+    color: white;
+    font-size: 2rem;
+    margin-bottom: 10px;
+}
+
+.profile-container > p {
+    color: #a0aec0;
+    font-size: 1.1rem;
+    margin-bottom: 40px;
+}
+
+.profile-cards {
+    display: flex;
+    gap: 25px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.profile-card {
+    background: white;
+    border-radius: 16px;
+    padding: 35px 30px;
+    width: 200px;
+    cursor: pointer;
+    transition: transform 0.3s, box-shadow 0.3s;
+    border: 3px solid transparent;
+}
+
+.profile-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 20px 50px rgba(245, 166, 35, 0.3);
+    border-color: #f5a623;
+}
+
+.profile-icon {
+    font-size: 3rem;
+    margin-bottom: 15px;
+}
+
+.profile-card h3 {
+    color: #2d3748;
+    font-size: 1.2rem;
+    margin-bottom: 8px;
+}
+
+.profile-card p {
+    color: #718096;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+/* === GAME HUD SCREEN === */
+#screen-hud {
+    pointer-events: none;
+    background: transparent;
+    display: none;
+}
+
+#screen-hud.active {
+    display: block;
+}
+
+/* Progress Dots */
+.progress-dots {
+    position: absolute;
+    top: 20px;
+    right: 25px;
+    display: flex;
+    gap: 10px;
+}
+
+.dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    transition: all 0.3s;
+}
+
+.dot.active {
+    background: #f5a623;
+    border-color: #f5a623;
+    box-shadow: 0 0 10px rgba(245, 166, 35, 0.5);
+}
+
+.dot.completed {
+    background: #48bb78;
+    border-color: #48bb78;
+}
+
+/* Scenario Card */
+.scenario-card {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: white;
+    border-radius: 12px;
+    padding: 20px 35px;
+    max-width: 600px;
+    width: 90%;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    text-align: left;
+    pointer-events: auto;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.4s, transform 0.4s;
+}
+
+.scenario-card.visible {
+    opacity: 1;
+    visibility: visible;
+    animation: slideDown 0.4s ease-out;
+}
+
+.scenario-badge {
+    display: inline-block;
+    background: #f5a623;
+    color: white;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.scenario-card h2 {
+    color: #2d3748;
+    font-size: 1.4rem;
+    margin-bottom: 10px;
+    font-weight: 700;
+}
+
+.scenario-card p {
+    color: #4a5568;
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+/* Options Container */
+.options-container {
+    position: absolute;
+    bottom: 30px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding: 0 40px;
+    pointer-events: auto;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.4s;
+}
+
+.options-container.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.option-card {
+    background: white;
+    border: 2px solid #f5a623;
+    border-radius: 12px;
+    padding: 18px 22px;
+    width: 220px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
+}
+
+.option-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 35px rgba(245, 166, 35, 0.3);
+    border-color: #e6951a;
+}
+
+.option-card:active {
+    transform: translateY(-2px);
+}
+
+.option-header {
+    color: #f5a623;
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.option-text {
+    color: #2d3748;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+/* Option positioning */
+.option-left {
+    animation: slideInLeft 0.5s ease-out;
+}
+
+.option-center {
+    position: relative;
+    bottom: 60px;
+    animation: slideInUp 0.5s ease-out;
+}
+
+.option-right {
+    animation: slideInRight 0.5s ease-out;
+}
+
+/* Feedback Toast */
+.feedback-toast {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    border-radius: 16px;
+    padding: 30px 50px;
+    text-align: center;
+    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.3s, transform 0.3s;
+    max-width: 450px;
+}
+
+.feedback-toast.visible {
+    opacity: 1;
+    visibility: visible;
+    animation: popIn 0.4s ease-out;
+}
+
+.feedback-toast.correct {
+    border: 3px solid #48bb78;
+}
+
+.feedback-toast.incorrect {
+    border: 3px solid #e53e3e;
+}
+
+.feedback-icon {
+    font-size: 3rem;
+    margin-bottom: 15px;
+}
+
+.feedback-toast.correct .feedback-icon {
+    color: #48bb78;
+}
+
+.feedback-toast.incorrect .feedback-icon {
+    color: #e53e3e;
+}
+
+.feedback-text {
+    color: #2d3748;
+    font-size: 1.1rem;
+    line-height: 1.5;
+}
+
+/* === END SCREEN === */
+#screen-end {
+    background: rgba(0, 0, 0, 0.9);
+}
+
+.end-card {
+    background: white;
+    border-radius: 20px;
+    padding: 50px 60px;
+    text-align: center;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 25px 80px rgba(0, 0, 0, 0.4);
+    animation: scaleIn 0.5s ease-out;
+}
+
+.end-icon {
+    font-size: 4rem;
+    margin-bottom: 20px;
+}
+
+.end-card h1 {
+    color: #2d3748;
+    font-size: 2rem;
+    margin-bottom: 25px;
+}
+
+.score-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 25px;
+}
+
+.score-value {
+    font-size: 4rem;
+    font-weight: 700;
+    color: #f5a623;
+    line-height: 1;
+}
+
+.score-label {
+    font-size: 1.1rem;
+    color: #718096;
+    margin-top: 5px;
+}
+
+.end-message {
+    color: #4a5568;
+    font-size: 1.1rem;
+    line-height: 1.6;
+    margin-bottom: 30px;
+    padding: 0 10px;
+}
+
+.btn-cta {
+    display: inline-block;
+    padding: 16px 40px;
+    background: linear-gradient(135deg, #f5a623 0%, #e6951a 100%);
+    color: white;
+    text-decoration: none;
+    border-radius: 10px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    transition: transform 0.2s, box-shadow 0.2s;
+    margin-bottom: 15px;
+}
+
+.btn-cta:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 30px rgba(245, 166, 35, 0.4);
+}
+
+.btn-secondary {
+    display: block;
+    width: 100%;
+    padding: 14px 30px;
+    background: transparent;
+    color: #718096;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 10px;
+}
+
+.btn-secondary:hover {
+    background: #f7fafc;
+    border-color: #cbd5e0;
+    color: #4a5568;
+}
+
+/* === ANIMATIONS === */
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(40px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideInLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-50px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(50px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes popIn {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.8);
+    }
+    70% {
+        transform: translate(-50%, -50%) scale(1.05);
+    }
+    100% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* === RESPONSIVE === */
+@media (max-width: 900px) {
+    .options-container {
+        padding: 0 20px;
+    }
+    
+    .option-card {
+        width: 180px;
+        padding: 14px 16px;
+    }
+    
+    .option-center {
+        bottom: 40px;
+    }
+    
+    .scenario-card {
+        padding: 18px 25px;
+    }
+    
+    .scenario-card h2 {
+        font-size: 1.2rem;
+    }
+}
+
+@media (max-width: 700px) {
+    .options-container {
+        flex-direction: column;
+        align-items: center;
+        gap: 15px;
+        bottom: 20px;
+    }
+    
+    .option-card {
+        width: 280px;
+    }
+    
+    .option-center {
+        bottom: auto;
+    }
+    
+    .profile-cards {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .profile-card {
+        width: 250px;
+    }
+    
+    .email-card {
+        padding: 35px 25px;
+    }
+    
+    .email-header h1 {
+        font-size: 1.8rem;
+    }
+    
+    .end-card {
+        padding: 35px 25px;
+    }
+}
