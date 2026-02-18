@@ -231,20 +231,21 @@ class GameRenderer {
         backRoad.receiveShadow = true;
         this.intersectionGroup.add(backRoad);
         
-        // === YELLOW DIRECTION POLES ===
-        this.createDirectionPole(-5, -8, 'LEFT', 'left');
-        this.createDirectionPole(0, -12, 'STRAIGHT', 'straight');
-        this.createDirectionPole(5, -8, 'RIGHT', 'right');
+        // === YELLOW DIRECTION POLES - at the far side of intersection ===
+        this.createDirectionPole(-8, -12, 'LEFT', 'left');
+        this.createDirectionPole(0, -15, 'STRAIGHT', 'straight');
+        this.createDirectionPole(8, -12, 'RIGHT', 'right');
         
-        // === STOP SIGN - on the RIGHT side of road ===
-        this.createStopSign(this.ROAD_WIDTH / 2 + 2, this.STOP_DISTANCE - 5);
+        // === STOP SIGN - on the RIGHT side of road, before intersection ===
+        this.createStopSign(this.ROAD_WIDTH / 2 + 2, 18);
         
-        // === WHITE STOP LINE on road ===
+        // === WHITE STOP LINE on road - at edge of junction ===
+        const junctionEdge = this.ROAD_WIDTH * 2.5 / 2;
         const stopLineGeo = new THREE.PlaneGeometry(this.ROAD_WIDTH - 1, 0.8);
         const stopLineMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
         const stopLine = new THREE.Mesh(stopLineGeo, stopLineMat);
         stopLine.rotation.x = -Math.PI / 2;
-        stopLine.position.set(0, 0.025, this.STOP_DISTANCE - 2);
+        stopLine.position.set(0, 0.025, junctionEdge + 2);
         this.intersectionGroup.add(stopLine);
         
         this.intersectionGroup.visible = false;
@@ -365,59 +366,60 @@ class GameRenderer {
     createRoadsideScenery() {
         const roadSide = this.ROAD_WIDTH / 2 + 3;
         
-        // Trees along both sides
-        for (let z = 80; z > -150; z -= 15) {
+        // Trees along both sides - ONLY BEFORE intersection (z > 20)
+        // Intersection is at z = -10 approximately, so keep scenery away from there
+        for (let z = 80; z > 25; z -= 12) {
             // Left side trees
             const leftTree = this.createTree();
-            leftTree.position.set(-roadSide - 8 - Math.random() * 10, 0, z + Math.random() * 5);
+            leftTree.position.set(-roadSide - 10 - Math.random() * 12, 0, z + Math.random() * 5);
             this.scene.add(leftTree);
             this.sceneryObjects.push(leftTree);
             
             // Right side trees
             const rightTree = this.createTree();
-            rightTree.position.set(roadSide + 8 + Math.random() * 10, 0, z + Math.random() * 5);
+            rightTree.position.set(roadSide + 10 + Math.random() * 12, 0, z + Math.random() * 5);
             this.scene.add(rightTree);
             this.sceneryObjects.push(rightTree);
         }
         
-        // Fences along both sides
-        this.createFence(-roadSide - 3, 70, -120, 'left');
-        this.createFence(roadSide + 3, 70, -120, 'right');
+        // Fences along both sides - ONLY before the intersection area
+        this.createFence(-roadSide - 4, 75, 30, 'left');
+        this.createFence(roadSide + 4, 75, 30, 'right');
         
-        // Barns in the distance
+        // Barns FAR in the distance (not near intersection)
         const barn1 = this.createBarn();
-        barn1.position.set(-50, 0, -80);
+        barn1.position.set(-70, 0, 60);
         barn1.rotation.y = 0.3;
         this.scene.add(barn1);
         this.sceneryObjects.push(barn1);
         
         const barn2 = this.createBarn();
-        barn2.position.set(60, 0, 30);
+        barn2.position.set(75, 0, 50);
         barn2.rotation.y = -0.5;
         this.scene.add(barn2);
         this.sceneryObjects.push(barn2);
         
-        // Fields (hay bales)
-        for (let i = 0; i < 8; i++) {
+        // Hay bales - only in far areas, not near intersection
+        for (let i = 0; i < 6; i++) {
             const hayBale = this.createHayBale();
             const side = i % 2 === 0 ? -1 : 1;
             hayBale.position.set(
-                side * (30 + Math.random() * 40),
+                side * (40 + Math.random() * 35),
                 0,
-                40 - i * 20 + Math.random() * 10
+                70 - i * 8 + Math.random() * 5
             );
             this.scene.add(hayBale);
             this.sceneryObjects.push(hayBale);
         }
         
-        // Additional scattered trees in fields
-        for (let i = 0; i < 15; i++) {
+        // Additional scattered trees in far fields only
+        for (let i = 0; i < 12; i++) {
             const tree = this.createTree();
             const side = Math.random() > 0.5 ? -1 : 1;
             tree.position.set(
-                side * (35 + Math.random() * 60),
+                side * (45 + Math.random() * 50),
                 0,
-                100 - Math.random() * 250
+                90 - Math.random() * 60
             );
             this.scene.add(tree);
             this.sceneryObjects.push(tree);
@@ -639,9 +641,11 @@ class GameRenderer {
         if (instant) {
             this.camera.position.set(behindX, targetY, behindZ);
         } else {
-            this.camera.position.x += (behindX - this.camera.position.x) * 0.05;
-            this.camera.position.y += (targetY - this.camera.position.y) * 0.05;
-            this.camera.position.z += (behindZ - this.camera.position.z) * 0.05;
+            // Smoother camera follow during turns
+            const smoothing = this.state === 'TURNING' ? 0.03 : 0.05;
+            this.camera.position.x += (behindX - this.camera.position.x) * smoothing;
+            this.camera.position.y += (targetY - this.camera.position.y) * smoothing;
+            this.camera.position.z += (behindZ - this.camera.position.z) * smoothing;
         }
         
         const lookX = this.car.position.x - Math.sin(this.car.rotation.y) * 12;
@@ -667,28 +671,28 @@ class GameRenderer {
         }
         
         if (this.state === 'APPROACHING') {
-            // Calculate distance to stop point (intersection + stop distance offset)
-            const stopX = this.intersectionGroup.position.x + Math.sin(this.intersectionGroup.rotation.y) * this.STOP_DISTANCE;
-            const stopZ = this.intersectionGroup.position.z + Math.cos(this.intersectionGroup.rotation.y) * this.STOP_DISTANCE;
+            // Calculate distance to intersection CENTER (car stops in the middle)
+            const stopX = this.intersectionGroup.position.x;
+            const stopZ = this.intersectionGroup.position.z;
             
             const dx = this.car.position.x - stopX;
             const dz = this.car.position.z - stopZ;
             const distToStop = Math.sqrt(dx * dx + dz * dz);
             
             // Slow down based on distance to stop point
-            const targetSpeed = Math.max(1, distToStop * 0.4);
-            this.carSpeed += (targetSpeed - this.carSpeed) * 2.5 * delta;
+            const targetSpeed = Math.max(0.5, distToStop * 0.35);
+            this.carSpeed += (targetSpeed - this.carSpeed) * 2 * delta;
             
             this.car.position.x -= Math.sin(this.car.rotation.y) * this.carSpeed * delta;
             this.car.position.z -= Math.cos(this.car.rotation.y) * this.carSpeed * delta;
             
             this.car.position.y = Math.sin(Date.now() * 0.003) * 0.02 * Math.max(0.1, this.carSpeed / 15);
             
-            // Stop when close to stop point
-            if (distToStop < 3) {
+            // Stop when close to intersection center
+            if (distToStop < 2) {
                 this.setState('STOPPED');
                 this.carSpeed = 0;
-                // Snap to exact stop position
+                // Snap to exact center position
                 this.car.position.x = stopX;
                 this.car.position.z = stopZ;
                 if (this.onStopAtIntersection) {
@@ -698,7 +702,8 @@ class GameRenderer {
         }
         
         if (this.state === 'TURNING') {
-            this.turnProgress += delta * 0.55;
+            // Slower, smoother turn
+            this.turnProgress += delta * 0.35;
             
             if (this.turnProgress >= 1) {
                 this.turnProgress = 1;
@@ -714,7 +719,7 @@ class GameRenderer {
             }
             
             this.car.rotation.y = this.turnStartRot + (this.turnEndRot - this.turnStartRot) * t;
-            this.car.position.y = Math.sin(this.turnProgress * Math.PI) * 0.06;
+            this.car.position.y = Math.sin(this.turnProgress * Math.PI) * 0.04;
         }
         
         if (this.state === 'ARRIVING') {
