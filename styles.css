@@ -417,6 +417,7 @@ body {
 .feedback-toast.visible {
     opacity: 1;
     visibility: visible;
+    pointer-events: auto;
     animation: popIn 0.4s ease-out;
 }
 
@@ -445,6 +446,32 @@ body {
     color: #2d3748;
     font-size: 1.1rem;
     line-height: 1.5;
+    margin-bottom: 20px;
+}
+
+.btn-ok {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 12px 40px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.btn-ok:hover {
+    transform: scale(1.05);
+    box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+}
+
+.feedback-toast.correct .btn-ok {
+    background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+}
+
+.feedback-toast.incorrect .btn-ok {
+    background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
 }
 
 /* === END SCREEN === */

@@ -12,6 +12,7 @@ class GameController {
         this.score = 0;
         this.answers = [];
         this.isTransitioning = false;
+        this.pendingDirection = null;
         
         // User data
         this.userData = {
@@ -73,6 +74,7 @@ class GameController {
         this.elements.feedbackToast = document.getElementById('feedback-toast');
         this.elements.feedbackIcon = document.getElementById('feedback-icon');
         this.elements.feedbackText = document.getElementById('feedback-text');
+        this.elements.feedbackOk = document.getElementById('feedback-ok');
         
         // End screen elements
         this.elements.endTitle = document.getElementById('end-title');
@@ -100,6 +102,11 @@ class GameController {
                     this.handleOptionSelect(card.dataset.direction);
                 }
             });
+        });
+        
+        // Feedback OK button - triggers the turn
+        this.elements.feedbackOk.addEventListener('click', () => {
+            this.handleFeedbackOk();
         });
         
         // Play again button
@@ -280,6 +287,9 @@ class GameController {
         const scenario = SCENARIOS[this.currentScenario];
         const option = scenario.options.find(o => o.direction === direction);
         
+        // Store selected direction for when OK is clicked
+        this.pendingDirection = direction;
+        
         // Record answer
         this.answers.push({
             scenario: this.currentScenario,
@@ -295,13 +305,8 @@ class GameController {
         // Hide scenario UI
         this.hideScenario();
         
-        // Start turn animation
-        gameRenderer.turn(direction);
-        
-        // Show feedback after turn starts
-        setTimeout(() => {
-            this.showFeedback(option);
-        }, 600);
+        // Show feedback immediately (car stays stopped, waiting for OK)
+        this.showFeedback(option);
     }
     
     showFeedback(option) {
@@ -313,13 +318,19 @@ class GameController {
         this.elements.feedbackToast.classList.remove('correct', 'incorrect');
         this.elements.feedbackToast.classList.add(option.isCorrect ? 'correct' : 'incorrect');
         
-        // Show toast
+        // Show toast with OK button
         this.elements.feedbackToast.classList.add('visible');
+    }
+    
+    handleFeedbackOk() {
+        // Hide the feedback toast
+        this.elements.feedbackToast.classList.remove('visible');
         
-        // Hide after delay
-        setTimeout(() => {
-            this.elements.feedbackToast.classList.remove('visible');
-        }, CONFIG.speeds.feedbackDisplayMs);
+        // Now trigger the turn animation
+        if (this.pendingDirection) {
+            gameRenderer.turn(this.pendingDirection);
+            this.pendingDirection = null;
+        }
     }
     
     onTurnComplete() {
@@ -414,6 +425,7 @@ class GameController {
         this.score = 0;
         this.answers = [];
         this.isTransitioning = false;
+        this.pendingDirection = null;
         
         // Reset renderer
         gameRenderer.reset();
