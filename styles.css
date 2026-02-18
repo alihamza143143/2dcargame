@@ -345,13 +345,13 @@ body {
 /* Options Container */
 .options-container {
     position: absolute;
-    bottom: 180px;
+    bottom: 240px;
     left: 0;
     right: 0;
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
-    padding: 0 40px;
+    padding: 0 270px;
     pointer-events: auto;
     opacity: 0;
     visibility: hidden;
@@ -407,7 +407,7 @@ body {
 
 .option-center {
     position: relative;
-    bottom: 190px;
+    bottom: 129px;
     animation: slideInUp 0.5s ease-out;
 }
 
