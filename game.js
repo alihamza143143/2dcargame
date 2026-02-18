@@ -54,16 +54,21 @@ class GameRenderer {
         document.body.insertBefore(this.container, document.body.firstChild);
         
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x87CEEB);
         
-        // Add fog for depth
-        this.scene.fog = new THREE.Fog(0x87CEEB, 100, 400);
+        // Create realistic gradient sky
+        this.createSkyGradient();
+        
+        // Atmospheric fog with warm sunset tint
+        this.scene.fog = new THREE.Fog(0xD4A574, 80, 350);
         
         this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
         
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.shadowMap.enabled = true;
+        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        this.renderer.toneMappingExposure = 1.2;
         this.container.appendChild(this.renderer.domElement);
         
         // Build scene
@@ -85,11 +90,17 @@ class GameRenderer {
     }
     
     setupLighting() {
-        const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+        // Warm ambient light for sunset atmosphere
+        const ambient = new THREE.AmbientLight(0xFFE4C4, 0.5);
         this.scene.add(ambient);
         
-        const sun = new THREE.DirectionalLight(0xffffff, 0.9);
-        sun.position.set(50, 100, 50);
+        // Hemisphere light for natural sky-ground color blending
+        const hemiLight = new THREE.HemisphereLight(0xFDB777, 0x80C080, 0.4);
+        this.scene.add(hemiLight);
+        
+        // Main sun - warm golden hour light
+        const sun = new THREE.DirectionalLight(0xFFD700, 1.0);
+        sun.position.set(80, 60, -100);
         sun.castShadow = true;
         sun.shadow.mapSize.width = 2048;
         sun.shadow.mapSize.height = 2048;
@@ -99,14 +110,112 @@ class GameRenderer {
         sun.shadow.camera.right = 200;
         sun.shadow.camera.top = 200;
         sun.shadow.camera.bottom = -200;
+        sun.shadow.bias = -0.0005;
         this.scene.add(sun);
         this.sun = sun;
+        
+        // Secondary fill light from opposite side
+        const fillLight = new THREE.DirectionalLight(0x87CEEB, 0.3);
+        fillLight.position.set(-50, 30, 50);
+        this.scene.add(fillLight);
+    }
+    
+    createSkyGradient() {
+        // Create a large sphere for the sky dome with gradient
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        
+        // Sunset gradient
+        const gradient = ctx.createLinearGradient(0, 0, 0, 512);
+        gradient.addColorStop(0, '#1e3a5f');     // Deep blue at top
+        gradient.addColorStop(0.2, '#4a6fa5');   // Medium blue
+        gradient.addColorStop(0.4, '#87CEEB');   // Sky blue
+        gradient.addColorStop(0.55, '#FDB777');  // Peachy orange
+        gradient.addColorStop(0.7, '#F4A460');   // Sandy brown/orange
+        gradient.addColorStop(0.85, '#DEB887');  // Warm horizon
+        gradient.addColorStop(1, '#D4A574');     // Dusty horizon
+        
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 512, 512);
+        
+        // Add some cloud-like texture
+        ctx.globalAlpha = 0.1;
+        for (let i = 0; i < 20; i++) {
+            const x = Math.random() * 512;
+            const y = 100 + Math.random() * 200;
+            const radius = 30 + Math.random() * 60;
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fill();
+        }
+        
+        const skyTexture = new THREE.CanvasTexture(canvas);
+        const skyGeo = new THREE.SphereGeometry(500, 32, 32);
+        const skyMat = new THREE.MeshBasicMaterial({
+            map: skyTexture,
+            side: THREE.BackSide
+        });
+        const sky = new THREE.Mesh(skyGeo, skyMat);
+        this.scene.add(sky);
+        this.sky = sky;
     }
     
     createGround() {
-        // Large ground plane - grass field
+        // Create procedural grass texture
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        
+        // Base grass color
+        ctx.fillStyle = '#4CAF50';
+        ctx.fillRect(0, 0, 512, 512);
+        
+        // Add grass variation
+        for (let i = 0; i < 5000; i++) {
+            const x = Math.random() * 512;
+            const y = Math.random() * 512;
+            const shade = Math.random();
+            
+            if (shade < 0.3) {
+                ctx.fillStyle = '#388E3C'; // Darker green
+            } else if (shade < 0.6) {
+                ctx.fillStyle = '#66BB6A'; // Lighter green
+            } else if (shade < 0.8) {
+                ctx.fillStyle = '#81C784'; // Even lighter
+            } else {
+                ctx.fillStyle = '#558B2F'; // Olive tint
+            }
+            
+            ctx.fillRect(x, y, 2 + Math.random() * 3, 1 + Math.random() * 2);
+        }
+        
+        // Add some brown patches for realism
+        ctx.globalAlpha = 0.3;
+        for (let i = 0; i < 30; i++) {
+            const x = Math.random() * 512;
+            const y = Math.random() * 512;
+            ctx.beginPath();
+            ctx.arc(x, y, 5 + Math.random() * 15, 0, Math.PI * 2);
+            ctx.fillStyle = '#8D6E63';
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        
+        const grassTexture = new THREE.CanvasTexture(canvas);
+        grassTexture.wrapS = THREE.RepeatWrapping;
+        grassTexture.wrapT = THREE.RepeatWrapping;
+        grassTexture.repeat.set(50, 50);
+        
+        // Large ground plane - textured grass field
         const groundGeo = new THREE.PlaneGeometry(2000, 2000);
-        const groundMat = new THREE.MeshLambertMaterial({ color: 0x4CAF50 });
+        const groundMat = new THREE.MeshLambertMaterial({ 
+            map: grassTexture,
+            color: 0x5D8C4D  // Slightly muted green tint
+        });
         this.ground = new THREE.Mesh(groundGeo, groundMat);
         this.ground.rotation.x = -Math.PI / 2;
         this.ground.position.y = -0.1;
@@ -115,19 +224,24 @@ class GameRenderer {
     }
     
     createHills() {
-        // Tennessee rolling hills in background
+        // Tennessee rolling hills in background - more realistic colors
         this.hillGroup = new THREE.Group();
         
         const hillConfigs = [
-            { x: -250, z: -350, height: 55, color: 0x2d5a2d },
-            { x: 0, z: -400, height: 70, color: 0x2d5a2d },
-            { x: 250, z: -370, height: 60, color: 0x2d5a2d },
-            { x: -350, z: -320, height: 50, color: 0x2d5a2d },
-            { x: 350, z: -350, height: 52, color: 0x2d5a2d },
-            { x: -180, z: -280, height: 40, color: 0x3d6b3d },
-            { x: 120, z: -300, height: 45, color: 0x3d6b3d },
-            { x: -280, z: -250, height: 35, color: 0x3d6b3d },
-            { x: 280, z: -280, height: 38, color: 0x3d6b3d },
+            // Far hills - more muted/blue-green (atmospheric perspective)
+            { x: -250, z: -350, height: 55, color: 0x4A6741 },
+            { x: 0, z: -400, height: 70, color: 0x456B45 },
+            { x: 250, z: -370, height: 60, color: 0x4A6741 },
+            { x: -350, z: -320, height: 50, color: 0x506B50 },
+            { x: 350, z: -350, height: 52, color: 0x4A6741 },
+            // Mid hills - richer greens
+            { x: -180, z: -280, height: 40, color: 0x5D7A52 },
+            { x: 120, z: -300, height: 45, color: 0x5D7A52 },
+            { x: -280, z: -250, height: 35, color: 0x6B8E5A },
+            { x: 280, z: -280, height: 38, color: 0x5D7A52 },
+            // Closer hills with tree-covered look
+            { x: -400, z: -200, height: 30, color: 0x6B8E5A },
+            { x: 400, z: -220, height: 32, color: 0x6B8E5A },
         ];
         
         hillConfigs.forEach(cfg => {
@@ -136,6 +250,7 @@ class GameRenderer {
             const hill = new THREE.Mesh(hillGeo, hillMat);
             hill.position.set(cfg.x, 0, cfg.z);
             hill.scale.set(2.5, 1, 2.5);
+            hill.receiveShadow = true;
             this.hillGroup.add(hill);
         });
         
@@ -146,7 +261,39 @@ class GameRenderer {
         // Main road the car drives on
         this.roadGroup = new THREE.Group();
         
-        const roadMat = new THREE.MeshLambertMaterial({ color: 0x2a2a2a });
+        // Create asphalt texture
+        const asphaltCanvas = document.createElement('canvas');
+        asphaltCanvas.width = 256;
+        asphaltCanvas.height = 256;
+        const aCtx = asphaltCanvas.getContext('2d');
+        
+        // Dark asphalt base
+        aCtx.fillStyle = '#2A2A2A';
+        aCtx.fillRect(0, 0, 256, 256);
+        
+        // Add gravel/texture noise
+        for (let i = 0; i < 2000; i++) {
+            const x = Math.random() * 256;
+            const y = Math.random() * 256;
+            const shade = Math.random();
+            if (shade < 0.3) {
+                aCtx.fillStyle = '#1A1A1A';
+            } else if (shade < 0.6) {
+                aCtx.fillStyle = '#333333';
+            } else {
+                aCtx.fillStyle = '#3A3A3A';
+            }
+            aCtx.fillRect(x, y, 1 + Math.random() * 2, 1 + Math.random() * 2);
+        }
+        
+        const asphaltTexture = new THREE.CanvasTexture(asphaltCanvas);
+        asphaltTexture.wrapS = THREE.RepeatWrapping;
+        asphaltTexture.wrapT = THREE.RepeatWrapping;
+        asphaltTexture.repeat.set(2, 150);
+        
+        const roadMat = new THREE.MeshLambertMaterial({ map: asphaltTexture });
+        this.roadMaterial = roadMat; // Store for reuse
+        
         const lineMat = new THREE.MeshBasicMaterial({ color: 0xFFDD00 });
         const edgeMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
         
@@ -185,7 +332,31 @@ class GameRenderer {
     createIntersection() {
         this.intersectionGroup = new THREE.Group();
         
-        const roadMat = new THREE.MeshLambertMaterial({ color: 0x2a2a2a });
+        // Use the same asphalt texture as main road, or create new if not exists
+        let roadMat;
+        if (this.roadMaterial) {
+            roadMat = this.roadMaterial;
+        } else {
+            // Fallback - create asphalt texture
+            const asphaltCanvas = document.createElement('canvas');
+            asphaltCanvas.width = 256;
+            asphaltCanvas.height = 256;
+            const aCtx = asphaltCanvas.getContext('2d');
+            aCtx.fillStyle = '#2A2A2A';
+            aCtx.fillRect(0, 0, 256, 256);
+            for (let i = 0; i < 2000; i++) {
+                const x = Math.random() * 256;
+                const y = Math.random() * 256;
+                aCtx.fillStyle = Math.random() > 0.5 ? '#333333' : '#1A1A1A';
+                aCtx.fillRect(x, y, 1 + Math.random() * 2, 1 + Math.random() * 2);
+            }
+            const asphaltTexture = new THREE.CanvasTexture(asphaltCanvas);
+            asphaltTexture.wrapS = THREE.RepeatWrapping;
+            asphaltTexture.wrapT = THREE.RepeatWrapping;
+            asphaltTexture.repeat.set(2, 50);
+            roadMat = new THREE.MeshLambertMaterial({ map: asphaltTexture });
+        }
+        
         const lineMat = new THREE.MeshBasicMaterial({ color: 0xFFDD00 });
         const edgeMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
         
@@ -572,6 +743,103 @@ class GameRenderer {
         
         // Create rich Tennessee scenery on both sides of the road
         this.createRoadsideScenery();
+        
+        // Add lake/pond with dock
+        this.createLake();
+    }
+    
+    createLake() {
+        // Create a lake on the right side (like in client's image)
+        const lakeGroup = new THREE.Group();
+        
+        // Water surface - reflective blue
+        const waterGeo = new THREE.CircleGeometry(40, 32);
+        const waterMat = new THREE.MeshPhongMaterial({ 
+            color: 0x4A90A4,
+            shininess: 80,
+            transparent: true,
+            opacity: 0.85
+        });
+        const water = new THREE.Mesh(waterGeo, waterMat);
+        water.rotation.x = -Math.PI / 2;
+        water.position.set(120, 0.05, -50);
+        lakeGroup.add(water);
+        
+        // Shore/beach ring
+        const shoreGeo = new THREE.RingGeometry(38, 45, 32);
+        const shoreMat = new THREE.MeshLambertMaterial({ color: 0xC2B280 }); // Sandy color
+        const shore = new THREE.Mesh(shoreGeo, shoreMat);
+        shore.rotation.x = -Math.PI / 2;
+        shore.position.set(120, 0.02, -50);
+        lakeGroup.add(shore);
+        
+        // Dock
+        const dockGroup = new THREE.Group();
+        const woodMat = new THREE.MeshLambertMaterial({ color: 0x8B7355 });
+        
+        // Main dock platform
+        const dockGeo = new THREE.BoxGeometry(3, 0.3, 15);
+        const dock = new THREE.Mesh(dockGeo, woodMat);
+        dock.position.set(80, 0.5, -50);
+        dock.castShadow = true;
+        dockGroup.add(dock);
+        
+        // Dock supports
+        for (let z = -55; z <= -45; z += 5) {
+            const postGeo = new THREE.CylinderGeometry(0.15, 0.15, 1.5, 8);
+            const post = new THREE.Mesh(postGeo, woodMat);
+            post.position.set(79, 0, z);
+            dockGroup.add(post);
+            
+            const post2 = new THREE.Mesh(postGeo, woodMat);
+            post2.position.set(81, 0, z);
+            dockGroup.add(post2);
+        }
+        
+        // Dock railing posts
+        const railMat = new THREE.MeshLambertMaterial({ color: 0x6B5344 });
+        for (let z = -57; z <= -43; z += 7) {
+            const railPost = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.2, 6), railMat);
+            railPost.position.set(78.3, 1.1, z);
+            dockGroup.add(railPost);
+            
+            const railPost2 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.2, 6), railMat);
+            railPost2.position.set(81.7, 1.1, z);
+            dockGroup.add(railPost2);
+        }
+        
+        lakeGroup.add(dockGroup);
+        
+        // Reeds/cattails around lake
+        for (let i = 0; i < 15; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 35 + Math.random() * 8;
+            const x = 120 + Math.cos(angle) * radius;
+            const z = -50 + Math.sin(angle) * radius;
+            
+            const reedGroup = new THREE.Group();
+            const reedMat = new THREE.MeshLambertMaterial({ color: 0x556B2F });
+            
+            // Stem
+            const stemGeo = new THREE.CylinderGeometry(0.03, 0.05, 2 + Math.random(), 6);
+            const stem = new THREE.Mesh(stemGeo, reedMat);
+            stem.position.y = 1;
+            reedGroup.add(stem);
+            
+            // Cattail top
+            const topGeo = new THREE.CylinderGeometry(0.1, 0.08, 0.4, 8);
+            const topMat = new THREE.MeshLambertMaterial({ color: 0x4A3728 });
+            const top = new THREE.Mesh(topGeo, topMat);
+            top.position.y = 2;
+            reedGroup.add(top);
+            
+            reedGroup.position.set(x, 0, z);
+            reedGroup.rotation.z = (Math.random() - 0.5) * 0.2;
+            lakeGroup.add(reedGroup);
+        }
+        
+        this.scene.add(lakeGroup);
+        this.sceneryObjects.push(lakeGroup);
     }
     
     createRoadsideScenery() {
@@ -639,32 +907,97 @@ class GameRenderer {
     createTree() {
         const tree = new THREE.Group();
         
-        // Trunk
-        const trunkGeo = new THREE.CylinderGeometry(0.3, 0.5, 4, 8);
-        const trunkMat = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
-        const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-        trunk.position.y = 2;
-        trunk.castShadow = true;
-        tree.add(trunk);
+        // Randomize tree type - mix of evergreen and deciduous with fall colors
+        const treeType = Math.random();
         
-        // Foliage layers (pine tree style)
-        const foliageMat = new THREE.MeshLambertMaterial({ color: 0x228B22 });
-        const layers = [
-            { y: 4, radius: 3, height: 3.5 },
-            { y: 6, radius: 2.3, height: 3 },
-            { y: 7.5, radius: 1.6, height: 2.5 },
-            { y: 8.7, radius: 0.9, height: 2 }
-        ];
+        if (treeType < 0.4) {
+            // Deciduous tree with fall colors (like in client's image)
+            // Trunk
+            const trunkGeo = new THREE.CylinderGeometry(0.3, 0.5, 5, 8);
+            const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5D4037 });
+            const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+            trunk.position.y = 2.5;
+            trunk.castShadow = true;
+            tree.add(trunk);
+            
+            // Fall foliage colors
+            const fallColors = [0xD84315, 0xE65100, 0xF57C00, 0xFF8F00, 0xC62828, 0xBF360C, 0x8D6E63];
+            const foliageColor = fallColors[Math.floor(Math.random() * fallColors.length)];
+            const foliageMat = new THREE.MeshLambertMaterial({ color: foliageColor });
+            
+            // Round canopy (deciduous style)
+            const canopyGeo = new THREE.SphereGeometry(3.5, 12, 8);
+            const canopy = new THREE.Mesh(canopyGeo, foliageMat);
+            canopy.position.y = 7;
+            canopy.scale.set(1, 0.8, 1);
+            canopy.castShadow = true;
+            tree.add(canopy);
+            
+            // Add some smaller spheres for natural look
+            for (let i = 0; i < 3; i++) {
+                const smallCanopy = new THREE.Mesh(
+                    new THREE.SphereGeometry(1.5 + Math.random(), 8, 6),
+                    foliageMat
+                );
+                smallCanopy.position.set(
+                    (Math.random() - 0.5) * 3,
+                    6 + Math.random() * 2,
+                    (Math.random() - 0.5) * 3
+                );
+                smallCanopy.castShadow = true;
+                tree.add(smallCanopy);
+            }
+        } else if (treeType < 0.7) {
+            // Green deciduous tree
+            const trunkGeo = new THREE.CylinderGeometry(0.25, 0.4, 4, 8);
+            const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5D4037 });
+            const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+            trunk.position.y = 2;
+            trunk.castShadow = true;
+            tree.add(trunk);
+            
+            const greenColors = [0x2E7D32, 0x388E3C, 0x43A047, 0x4CAF50, 0x558B2F];
+            const foliageColor = greenColors[Math.floor(Math.random() * greenColors.length)];
+            const foliageMat = new THREE.MeshLambertMaterial({ color: foliageColor });
+            
+            // Rounded canopy
+            const canopyGeo = new THREE.SphereGeometry(3, 10, 8);
+            const canopy = new THREE.Mesh(canopyGeo, foliageMat);
+            canopy.position.y = 5.5;
+            canopy.scale.set(1, 0.85, 1);
+            canopy.castShadow = true;
+            tree.add(canopy);
+        } else {
+            // Pine/evergreen tree (original style but improved)
+            const trunkGeo = new THREE.CylinderGeometry(0.3, 0.5, 4, 8);
+            const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5D4037 });
+            const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+            trunk.position.y = 2;
+            trunk.castShadow = true;
+            tree.add(trunk);
+            
+            // Darker green for pines
+            const pineColors = [0x1B5E20, 0x2E7D32, 0x33691E];
+            const foliageColor = pineColors[Math.floor(Math.random() * pineColors.length)];
+            const foliageMat = new THREE.MeshLambertMaterial({ color: foliageColor });
+            
+            const layers = [
+                { y: 4, radius: 2.8, height: 3.5 },
+                { y: 6, radius: 2.2, height: 3 },
+                { y: 7.5, radius: 1.5, height: 2.5 },
+                { y: 8.7, radius: 0.8, height: 2 }
+            ];
+            
+            layers.forEach(layer => {
+                const coneGeo = new THREE.ConeGeometry(layer.radius, layer.height, 8);
+                const cone = new THREE.Mesh(coneGeo, foliageMat);
+                cone.position.y = layer.y;
+                cone.castShadow = true;
+                tree.add(cone);
+            });
+        }
         
-        layers.forEach(layer => {
-            const coneGeo = new THREE.ConeGeometry(layer.radius, layer.height, 8);
-            const cone = new THREE.Mesh(coneGeo, foliageMat);
-            cone.position.y = layer.y;
-            cone.castShadow = true;
-            tree.add(cone);
-        });
-        
-        const scale = 0.6 + Math.random() * 0.5;
+        const scale = 0.7 + Math.random() * 0.6;
         tree.scale.set(scale, scale, scale);
         
         return tree;
@@ -713,9 +1046,39 @@ class GameRenderer {
     createBarn() {
         const barn = new THREE.Group();
         
-        // Main structure
-        const wallMat = new THREE.MeshLambertMaterial({ color: 0x8B0000 }); // Dark red
-        const roofMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
+        // Create barn wall texture
+        const wallCanvas = document.createElement('canvas');
+        wallCanvas.width = 256;
+        wallCanvas.height = 256;
+        const wCtx = wallCanvas.getContext('2d');
+        
+        // Red barn base with wood grain texture
+        wCtx.fillStyle = '#8B0000';
+        wCtx.fillRect(0, 0, 256, 256);
+        
+        // Add wood planks
+        wCtx.strokeStyle = '#6B0000';
+        wCtx.lineWidth = 2;
+        for (let y = 0; y < 256; y += 20) {
+            wCtx.beginPath();
+            wCtx.moveTo(0, y);
+            wCtx.lineTo(256, y);
+            wCtx.stroke();
+        }
+        
+        // Add weathering
+        wCtx.globalAlpha = 0.15;
+        for (let i = 0; i < 100; i++) {
+            wCtx.fillStyle = Math.random() > 0.5 ? '#4A0000' : '#A52A2A';
+            wCtx.fillRect(Math.random() * 256, Math.random() * 256, 4 + Math.random() * 8, 2 + Math.random() * 4);
+        }
+        wCtx.globalAlpha = 1;
+        
+        const wallTexture = new THREE.CanvasTexture(wallCanvas);
+        const wallMat = new THREE.MeshLambertMaterial({ map: wallTexture });
+        
+        // Roof texture - grey/metallic
+        const roofMat = new THREE.MeshLambertMaterial({ color: 0x4A4A4A });
         
         // Walls
         const wallsGeo = new THREE.BoxGeometry(12, 8, 16);
@@ -739,12 +1102,21 @@ class GameRenderer {
         roof.castShadow = true;
         barn.add(roof);
         
-        // White trim/doors
-        const trimMat = new THREE.MeshLambertMaterial({ color: 0xFFFFFF });
+        // White trim/doors with cross pattern
+        const trimMat = new THREE.MeshLambertMaterial({ color: 0xF5F5F5 });
         const doorGeo = new THREE.PlaneGeometry(4, 6);
         const door = new THREE.Mesh(doorGeo, trimMat);
         door.position.set(0, 3, 8.01);
         barn.add(door);
+        
+        // Cross on door
+        const crossMat = new THREE.MeshLambertMaterial({ color: 0x8B0000 });
+        const crossH = new THREE.Mesh(new THREE.BoxGeometry(3.5, 0.3, 0.1), crossMat);
+        crossH.position.set(0, 3, 8.02);
+        barn.add(crossH);
+        const crossV = new THREE.Mesh(new THREE.BoxGeometry(0.3, 5.5, 0.1), crossMat);
+        crossV.position.set(0, 3, 8.02);
+        barn.add(crossV);
         
         return barn;
     }
