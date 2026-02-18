@@ -186,9 +186,10 @@ class GameRenderer {
         this.intersectionGroup = new THREE.Group();
         
         const roadMat = new THREE.MeshLambertMaterial({ color: 0x2a2a2a });
+        const lineMat = new THREE.MeshBasicMaterial({ color: 0xFFDD00 });
+        const edgeMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
         
         // === INTERSECTION CENTER (crossroads) ===
-        // Make it a proper connected intersection
         const junctionSize = this.ROAD_WIDTH * 2.5;
         const junctionGeo = new THREE.PlaneGeometry(junctionSize, junctionSize);
         const junction = new THREE.Mesh(junctionGeo, roadMat);
@@ -197,51 +198,128 @@ class GameRenderer {
         junction.receiveShadow = true;
         this.intersectionGroup.add(junction);
         
-        // === CONNECTED ROADS ===
+        // === CONNECTED ROADS WITH MARKINGS ===
         const sideRoadLength = 200;
+        const junctionEdge = junctionSize / 2;
         
-        // LEFT ROAD - connects directly to junction
+        // LEFT ROAD
         const leftRoadGeo = new THREE.PlaneGeometry(this.ROAD_WIDTH, sideRoadLength);
         const leftRoad = new THREE.Mesh(leftRoadGeo, roadMat);
         leftRoad.rotation.x = -Math.PI / 2;
         leftRoad.rotation.z = Math.PI / 2;
-        leftRoad.position.set(-junctionSize / 2 - sideRoadLength / 2, 0.04, 0);
+        leftRoad.position.set(-junctionEdge - sideRoadLength / 2, 0.04, 0);
         leftRoad.receiveShadow = true;
         this.intersectionGroup.add(leftRoad);
         
-        // RIGHT ROAD - connects directly to junction
+        // Left road markings - yellow center dashes
+        for (let x = -junctionEdge - 15; x > -junctionEdge - sideRoadLength; x -= 10) {
+            const dashGeo = new THREE.PlaneGeometry(5, 0.25);
+            const dash = new THREE.Mesh(dashGeo, lineMat);
+            dash.rotation.x = -Math.PI / 2;
+            dash.position.set(x, 0.08, 0);
+            this.intersectionGroup.add(dash);
+        }
+        // Left road white edges
+        const leftEdgeGeo = new THREE.PlaneGeometry(sideRoadLength, 0.3);
+        const leftEdgeTop = new THREE.Mesh(leftEdgeGeo, edgeMat);
+        leftEdgeTop.rotation.x = -Math.PI / 2;
+        leftEdgeTop.position.set(-junctionEdge - sideRoadLength / 2, 0.08, -this.ROAD_WIDTH / 2 + 0.2);
+        this.intersectionGroup.add(leftEdgeTop);
+        const leftEdgeBottom = new THREE.Mesh(leftEdgeGeo, edgeMat);
+        leftEdgeBottom.rotation.x = -Math.PI / 2;
+        leftEdgeBottom.position.set(-junctionEdge - sideRoadLength / 2, 0.08, this.ROAD_WIDTH / 2 - 0.2);
+        this.intersectionGroup.add(leftEdgeBottom);
+        
+        // RIGHT ROAD
         const rightRoad = new THREE.Mesh(leftRoadGeo, roadMat);
         rightRoad.rotation.x = -Math.PI / 2;
         rightRoad.rotation.z = Math.PI / 2;
-        rightRoad.position.set(junctionSize / 2 + sideRoadLength / 2, 0.04, 0);
+        rightRoad.position.set(junctionEdge + sideRoadLength / 2, 0.04, 0);
         rightRoad.receiveShadow = true;
         this.intersectionGroup.add(rightRoad);
         
-        // STRAIGHT ROAD - connects directly to junction
+        // Right road markings - yellow center dashes
+        for (let x = junctionEdge + 15; x < junctionEdge + sideRoadLength; x += 10) {
+            const dashGeo = new THREE.PlaneGeometry(5, 0.25);
+            const dash = new THREE.Mesh(dashGeo, lineMat);
+            dash.rotation.x = -Math.PI / 2;
+            dash.position.set(x, 0.08, 0);
+            this.intersectionGroup.add(dash);
+        }
+        // Right road white edges
+        const rightEdgeTop = new THREE.Mesh(leftEdgeGeo, edgeMat);
+        rightEdgeTop.rotation.x = -Math.PI / 2;
+        rightEdgeTop.position.set(junctionEdge + sideRoadLength / 2, 0.08, -this.ROAD_WIDTH / 2 + 0.2);
+        this.intersectionGroup.add(rightEdgeTop);
+        const rightEdgeBottom = new THREE.Mesh(leftEdgeGeo, edgeMat);
+        rightEdgeBottom.rotation.x = -Math.PI / 2;
+        rightEdgeBottom.position.set(junctionEdge + sideRoadLength / 2, 0.08, this.ROAD_WIDTH / 2 - 0.2);
+        this.intersectionGroup.add(rightEdgeBottom);
+        
+        // STRAIGHT ROAD (ahead)
         const straightRoadGeo = new THREE.PlaneGeometry(this.ROAD_WIDTH, sideRoadLength);
         const straightRoad = new THREE.Mesh(straightRoadGeo, roadMat);
         straightRoad.rotation.x = -Math.PI / 2;
-        straightRoad.position.set(0, 0.04, -junctionSize / 2 - sideRoadLength / 2);
+        straightRoad.position.set(0, 0.04, -junctionEdge - sideRoadLength / 2);
         straightRoad.receiveShadow = true;
         this.intersectionGroup.add(straightRoad);
         
-        // BACK ROAD (where car comes from) - extends back
+        // Straight road markings - yellow center dashes
+        for (let z = -junctionEdge - 15; z > -junctionEdge - sideRoadLength; z -= 10) {
+            const dashGeo = new THREE.PlaneGeometry(0.25, 5);
+            const dash = new THREE.Mesh(dashGeo, lineMat);
+            dash.rotation.x = -Math.PI / 2;
+            dash.position.set(0, 0.08, z);
+            this.intersectionGroup.add(dash);
+        }
+        // Straight road white edges
+        const straightEdgeGeo = new THREE.PlaneGeometry(0.3, sideRoadLength);
+        const straightEdgeLeft = new THREE.Mesh(straightEdgeGeo, edgeMat);
+        straightEdgeLeft.rotation.x = -Math.PI / 2;
+        straightEdgeLeft.position.set(-this.ROAD_WIDTH / 2 + 0.2, 0.08, -junctionEdge - sideRoadLength / 2);
+        this.intersectionGroup.add(straightEdgeLeft);
+        const straightEdgeRight = new THREE.Mesh(straightEdgeGeo, edgeMat);
+        straightEdgeRight.rotation.x = -Math.PI / 2;
+        straightEdgeRight.position.set(this.ROAD_WIDTH / 2 - 0.2, 0.08, -junctionEdge - sideRoadLength / 2);
+        this.intersectionGroup.add(straightEdgeRight);
+        
+        // BACK ROAD (where car comes from)
         const backRoad = new THREE.Mesh(straightRoadGeo, roadMat);
         backRoad.rotation.x = -Math.PI / 2;
-        backRoad.position.set(0, 0.04, junctionSize / 2 + sideRoadLength / 2);
+        backRoad.position.set(0, 0.04, junctionEdge + sideRoadLength / 2);
         backRoad.receiveShadow = true;
         this.intersectionGroup.add(backRoad);
         
-        // === YELLOW DIRECTION POLES - at the far side of intersection ===
+        // Back road markings - yellow center dashes
+        for (let z = junctionEdge + 15; z < junctionEdge + sideRoadLength; z += 10) {
+            const dashGeo = new THREE.PlaneGeometry(0.25, 5);
+            const dash = new THREE.Mesh(dashGeo, lineMat);
+            dash.rotation.x = -Math.PI / 2;
+            dash.position.set(0, 0.08, z);
+            this.intersectionGroup.add(dash);
+        }
+        // Back road white edges
+        const backEdgeLeft = new THREE.Mesh(straightEdgeGeo, edgeMat);
+        backEdgeLeft.rotation.x = -Math.PI / 2;
+        backEdgeLeft.position.set(-this.ROAD_WIDTH / 2 + 0.2, 0.08, junctionEdge + sideRoadLength / 2);
+        this.intersectionGroup.add(backEdgeLeft);
+        const backEdgeRight = new THREE.Mesh(straightEdgeGeo, edgeMat);
+        backEdgeRight.rotation.x = -Math.PI / 2;
+        backEdgeRight.position.set(this.ROAD_WIDTH / 2 - 0.2, 0.08, junctionEdge + sideRoadLength / 2);
+        this.intersectionGroup.add(backEdgeRight);
+        
+        // === ADD SCENERY TO INTERSECTION ROADS ===
+        this.addIntersectionScenery(junctionEdge, sideRoadLength);
+        
+        // === YELLOW DIRECTION POLES ===
         this.createDirectionPole(-8, -12, 'LEFT', 'left');
         this.createDirectionPole(0, -15, 'STRAIGHT', 'straight');
         this.createDirectionPole(8, -12, 'RIGHT', 'right');
         
-        // === STOP SIGN - on the RIGHT side of road, before intersection ===
+        // === STOP SIGN ===
         this.createStopSign(this.ROAD_WIDTH / 2 + 2, 18);
         
-        // === WHITE STOP LINE on road - at edge of junction ===
-        const junctionEdge = this.ROAD_WIDTH * 2.5 / 2;
+        // === WHITE STOP LINE ===
         const stopLineGeo = new THREE.PlaneGeometry(this.ROAD_WIDTH - 1, 0.8);
         const stopLineMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
         const stopLine = new THREE.Mesh(stopLineGeo, stopLineMat);
@@ -251,6 +329,138 @@ class GameRenderer {
         
         this.intersectionGroup.visible = false;
         this.scene.add(this.intersectionGroup);
+    }
+    
+    addIntersectionScenery(junctionEdge, roadLength) {
+        const roadSide = this.ROAD_WIDTH / 2 + 5;
+        
+        // === LEFT ROAD SCENERY ===
+        // Trees along left road
+        for (let x = -junctionEdge - 25; x > -120; x -= 15) {
+            const tree1 = this.createTree();
+            tree1.position.set(x, 0, -roadSide - 8 - Math.random() * 10);
+            this.intersectionGroup.add(tree1);
+            
+            const tree2 = this.createTree();
+            tree2.position.set(x - 5, 0, roadSide + 8 + Math.random() * 10);
+            this.intersectionGroup.add(tree2);
+        }
+        // Fences along left road
+        this.createIntersectionFence(-junctionEdge - 20, -100, -roadSide - 3, 'horizontal');
+        this.createIntersectionFence(-junctionEdge - 20, -100, roadSide + 3, 'horizontal');
+        
+        // === RIGHT ROAD SCENERY ===
+        // Trees along right road
+        for (let x = junctionEdge + 25; x < 120; x += 15) {
+            const tree1 = this.createTree();
+            tree1.position.set(x, 0, -roadSide - 8 - Math.random() * 10);
+            this.intersectionGroup.add(tree1);
+            
+            const tree2 = this.createTree();
+            tree2.position.set(x + 5, 0, roadSide + 8 + Math.random() * 10);
+            this.intersectionGroup.add(tree2);
+        }
+        // Fences along right road
+        this.createIntersectionFence(junctionEdge + 20, 100, -roadSide - 3, 'horizontal');
+        this.createIntersectionFence(junctionEdge + 20, 100, roadSide + 3, 'horizontal');
+        
+        // === STRAIGHT ROAD SCENERY ===
+        // Trees along straight road
+        for (let z = -junctionEdge - 25; z > -120; z -= 15) {
+            const tree1 = this.createTree();
+            tree1.position.set(-roadSide - 8 - Math.random() * 10, 0, z);
+            this.intersectionGroup.add(tree1);
+            
+            const tree2 = this.createTree();
+            tree2.position.set(roadSide + 8 + Math.random() * 10, 0, z - 5);
+            this.intersectionGroup.add(tree2);
+        }
+        // Fences along straight road
+        this.createIntersectionFence(-junctionEdge - 20, -100, -roadSide - 3, 'vertical-left');
+        this.createIntersectionFence(-junctionEdge - 20, -100, roadSide + 3, 'vertical-right');
+        
+        // === BARNS near intersection ===
+        const barn1 = this.createBarn();
+        barn1.position.set(-60, 0, -50);
+        barn1.rotation.y = 0.4;
+        this.intersectionGroup.add(barn1);
+        
+        const barn2 = this.createBarn();
+        barn2.position.set(70, 0, 40);
+        barn2.rotation.y = -0.3;
+        this.intersectionGroup.add(barn2);
+        
+        // === HAY BALES ===
+        for (let i = 0; i < 4; i++) {
+            const hay = this.createHayBale();
+            hay.position.set(
+                (i % 2 === 0 ? -1 : 1) * (50 + Math.random() * 20),
+                0,
+                -30 - i * 15
+            );
+            this.intersectionGroup.add(hay);
+        }
+    }
+    
+    createIntersectionFence(start, end, offset, direction) {
+        const postMat = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+        const railMat = new THREE.MeshLambertMaterial({ color: 0x654321 });
+        const postSpacing = 8;
+        const posts = [];
+        
+        if (direction === 'horizontal') {
+            // Fence runs along X axis
+            const step = start < end ? postSpacing : -postSpacing;
+            for (let x = start; (step > 0 ? x < end : x > end); x += step) {
+                const postGeo = new THREE.CylinderGeometry(0.1, 0.12, 1.5, 6);
+                const post = new THREE.Mesh(postGeo, postMat);
+                post.position.set(x, 0.75, offset);
+                post.castShadow = true;
+                this.intersectionGroup.add(post);
+                posts.push({ x: x, z: offset });
+            }
+            // Rails
+            for (let i = 0; i < posts.length - 1; i++) {
+                const p1 = posts[i];
+                const p2 = posts[i + 1];
+                const length = Math.abs(p2.x - p1.x);
+                const railGeo = new THREE.BoxGeometry(length, 0.08, 0.08);
+                
+                const topRail = new THREE.Mesh(railGeo, railMat);
+                topRail.position.set((p1.x + p2.x) / 2, 1.3, offset);
+                this.intersectionGroup.add(topRail);
+                
+                const bottomRail = new THREE.Mesh(railGeo, railMat);
+                bottomRail.position.set((p1.x + p2.x) / 2, 0.6, offset);
+                this.intersectionGroup.add(bottomRail);
+            }
+        } else {
+            // Fence runs along Z axis
+            const side = direction === 'vertical-left' ? -1 : 1;
+            for (let z = start; z > end; z -= postSpacing) {
+                const postGeo = new THREE.CylinderGeometry(0.1, 0.12, 1.5, 6);
+                const post = new THREE.Mesh(postGeo, postMat);
+                post.position.set(offset * side, 0.75, z);
+                post.castShadow = true;
+                this.intersectionGroup.add(post);
+                posts.push({ x: offset * side, z: z });
+            }
+            // Rails
+            for (let i = 0; i < posts.length - 1; i++) {
+                const p1 = posts[i];
+                const p2 = posts[i + 1];
+                const length = Math.abs(p2.z - p1.z);
+                const railGeo = new THREE.BoxGeometry(0.08, 0.08, length);
+                
+                const topRail = new THREE.Mesh(railGeo, railMat);
+                topRail.position.set(offset * side, 1.3, (p1.z + p2.z) / 2);
+                this.intersectionGroup.add(topRail);
+                
+                const bottomRail = new THREE.Mesh(railGeo, railMat);
+                bottomRail.position.set(offset * side, 0.6, (p1.z + p2.z) / 2);
+                this.intersectionGroup.add(bottomRail);
+            }
+        }
     }
     
     createDirectionPole(x, z, label, direction) {
@@ -367,9 +577,8 @@ class GameRenderer {
     createRoadsideScenery() {
         const roadSide = this.ROAD_WIDTH / 2 + 3;
         
-        // Trees along both sides - ONLY BEFORE intersection (z > 20)
-        // Intersection is at z = -10 approximately, so keep scenery away from there
-        for (let z = 80; z > 25; z -= 12) {
+        // Trees along both sides - extend closer to intersection
+        for (let z = 100; z > 15; z -= 12) {
             // Left side trees
             const leftTree = this.createTree();
             leftTree.position.set(-roadSide - 10 - Math.random() * 12, 0, z + Math.random() * 5);
@@ -383,11 +592,11 @@ class GameRenderer {
             this.sceneryObjects.push(rightTree);
         }
         
-        // Fences along both sides - ONLY before the intersection area
-        this.createFence(-roadSide - 4, 75, 30, 'left');
-        this.createFence(roadSide + 4, 75, 30, 'right');
+        // Fences along both sides - extend closer to intersection
+        this.createFence(-roadSide - 4, 95, 15, 'left');
+        this.createFence(roadSide + 4, 95, 15, 'right');
         
-        // Barns FAR in the distance (not near intersection)
+        // Barns
         const barn1 = this.createBarn();
         barn1.position.set(-70, 0, 60);
         barn1.rotation.y = 0.3;
@@ -400,7 +609,7 @@ class GameRenderer {
         this.scene.add(barn2);
         this.sceneryObjects.push(barn2);
         
-        // Hay bales - only in far areas, not near intersection
+        // Hay bales
         for (let i = 0; i < 6; i++) {
             const hayBale = this.createHayBale();
             const side = i % 2 === 0 ? -1 : 1;
