@@ -33,6 +33,7 @@ class GameRenderer {
         this.turnDirection = null;
         this.turnStartPos = null;
         this.turnEndPos = null;
+        this.turnControlPoint = null;
         this.turnStartRot = 0;
         this.turnEndRot = 0;
         
@@ -641,8 +642,8 @@ class GameRenderer {
         if (instant) {
             this.camera.position.set(behindX, targetY, behindZ);
         } else {
-            // Smoother camera follow during turns
-            const smoothing = this.state === 'TURNING' ? 0.03 : 0.05;
+            // Very smooth camera follow during turns (slower smoothing)
+            const smoothing = this.state === 'TURNING' ? 0.025 : 0.05;
             this.camera.position.x += (behindX - this.camera.position.x) * smoothing;
             this.camera.position.y += (targetY - this.camera.position.y) * smoothing;
             this.camera.position.z += (behindZ - this.camera.position.z) * smoothing;
@@ -671,16 +672,17 @@ class GameRenderer {
         }
         
         if (this.state === 'APPROACHING') {
-            // Calculate distance to intersection CENTER (car stops in the middle)
-            const stopX = this.intersectionGroup.position.x;
-            const stopZ = this.intersectionGroup.position.z;
+            // Car stops BEFORE the intersection center (about 12 units back)
+            const stopOffset = 12;
+            const stopX = this.intersectionGroup.position.x + Math.sin(this.intersectionGroup.rotation.y) * stopOffset;
+            const stopZ = this.intersectionGroup.position.z + Math.cos(this.intersectionGroup.rotation.y) * stopOffset;
             
             const dx = this.car.position.x - stopX;
             const dz = this.car.position.z - stopZ;
             const distToStop = Math.sqrt(dx * dx + dz * dz);
             
             // Slow down based on distance to stop point
-            const targetSpeed = Math.max(0.5, distToStop * 0.35);
+            const targetSpeed = Math.max(0.3, distToStop * 0.3);
             this.carSpeed += (targetSpeed - this.carSpeed) * 2 * delta;
             
             this.car.position.x -= Math.sin(this.car.rotation.y) * this.carSpeed * delta;
@@ -688,11 +690,11 @@ class GameRenderer {
             
             this.car.position.y = Math.sin(Date.now() * 0.003) * 0.02 * Math.max(0.1, this.carSpeed / 15);
             
-            // Stop when close to intersection center
-            if (distToStop < 2) {
+            // Stop when close to stop point
+            if (distToStop < 1.5) {
                 this.setState('STOPPED');
                 this.carSpeed = 0;
-                // Snap to exact center position
+                // Snap to exact stop position
                 this.car.position.x = stopX;
                 this.car.position.z = stopZ;
                 if (this.onStopAtIntersection) {
@@ -702,8 +704,8 @@ class GameRenderer {
         }
         
         if (this.state === 'TURNING') {
-            // Slower, smoother turn
-            this.turnProgress += delta * 0.35;
+            // Very slow, realistic turn speed
+            this.turnProgress += delta * 0.25;
             
             if (this.turnProgress >= 1) {
                 this.turnProgress = 1;
@@ -711,15 +713,27 @@ class GameRenderer {
                 return;
             }
             
-            const t = this.easeInOutCubic(this.turnProgress);
+            // Use smooth easing
+            const t = this.easeInOutQuad(this.turnProgress);
             
-            if (this.turnStartPos && this.turnEndPos) {
-                this.car.position.x = this.turnStartPos.x + (this.turnEndPos.x - this.turnStartPos.x) * t;
-                this.car.position.z = this.turnStartPos.z + (this.turnEndPos.z - this.turnStartPos.z) * t;
+            // For turns, use curved path (quadratic bezier)
+            if (this.turnStartPos && this.turnEndPos && this.turnControlPoint) {
+                // Quadratic bezier curve for realistic car path
+                const oneMinusT = 1 - t;
+                this.car.position.x = oneMinusT * oneMinusT * this.turnStartPos.x + 
+                                     2 * oneMinusT * t * this.turnControlPoint.x + 
+                                     t * t * this.turnEndPos.x;
+                this.car.position.z = oneMinusT * oneMinusT * this.turnStartPos.z + 
+                                     2 * oneMinusT * t * this.turnControlPoint.z + 
+                                     t * t * this.turnEndPos.z;
             }
             
-            this.car.rotation.y = this.turnStartRot + (this.turnEndRot - this.turnStartRot) * t;
-            this.car.position.y = Math.sin(this.turnProgress * Math.PI) * 0.04;
+            // Rotate car smoothly - delay rotation slightly for realism
+            const rotT = this.easeInOutQuad(Math.max(0, (this.turnProgress - 0.1) / 0.8));
+            this.car.rotation.y = this.turnStartRot + (this.turnEndRot - this.turnStartRot) * rotT;
+            
+            // Slight bounce
+            this.car.position.y = Math.sin(this.turnProgress * Math.PI) * 0.03;
         }
         
         if (this.state === 'ARRIVING') {
@@ -750,6 +764,10 @@ class GameRenderer {
     
     easeInOutCubic(t) {
         return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    }
+    
+    easeInOutQuad(t) {
+        return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
     }
     
     setState(newState) {
@@ -783,23 +801,38 @@ class GameRenderer {
         const intZ = this.intersectionGroup.position.z;
         const intRot = this.intersectionGroup.rotation.y;
         
-        const junctionSize = this.ROAD_WIDTH * 2.5;
-        const exitDist = junctionSize / 2 + 30;
+        // Distances for turn path
+        const turnRadius = 15; // How wide the turn arc is
+        const exitDist = 40; // How far down the new road car ends up
         
         if (direction === 'left') {
             this.turnEndRot = intRot + Math.PI / 2;
+            // Control point is at intersection center, offset toward the turn
+            this.turnControlPoint = {
+                x: intX - Math.cos(intRot) * turnRadius * 0.3,
+                z: intZ + Math.sin(intRot) * turnRadius * 0.3 - Math.cos(intRot) * turnRadius * 0.3
+            };
             this.turnEndPos = {
                 x: intX - Math.cos(intRot) * exitDist,
                 z: intZ + Math.sin(intRot) * exitDist
             };
         } else if (direction === 'right') {
             this.turnEndRot = intRot - Math.PI / 2;
+            this.turnControlPoint = {
+                x: intX + Math.cos(intRot) * turnRadius * 0.3,
+                z: intZ - Math.sin(intRot) * turnRadius * 0.3 - Math.cos(intRot) * turnRadius * 0.3
+            };
             this.turnEndPos = {
                 x: intX + Math.cos(intRot) * exitDist,
                 z: intZ - Math.sin(intRot) * exitDist
             };
         } else { // straight
             this.turnEndRot = intRot;
+            // For straight, control point is just ahead
+            this.turnControlPoint = {
+                x: intX - Math.sin(intRot) * 20,
+                z: intZ - Math.cos(intRot) * 20
+            };
             this.turnEndPos = {
                 x: intX - Math.sin(intRot) * exitDist,
                 z: intZ - Math.cos(intRot) * exitDist
@@ -819,9 +852,129 @@ class GameRenderer {
         this.roadGroup.position.set(this.car.position.x, 0, this.car.position.z);
         this.roadGroup.rotation.y = this.car.rotation.y;
         
+        // Regenerate scenery for the new road direction
+        this.regenerateSceneryForNewRoad();
+        
         if (this.onTurnComplete) {
             this.onTurnComplete();
         }
+    }
+    
+    regenerateSceneryForNewRoad() {
+        // Clear old scenery
+        this.sceneryObjects.forEach(obj => this.scene.remove(obj));
+        this.sceneryObjects = [];
+        
+        const carX = this.car.position.x;
+        const carZ = this.car.position.z;
+        const carRot = this.car.rotation.y;
+        const roadSide = this.ROAD_WIDTH / 2 + 3;
+        
+        // Generate trees along the new road direction (ahead of car)
+        for (let dist = 20; dist < 100; dist += 12) {
+            // Position along the road (ahead)
+            const baseX = carX - Math.sin(carRot) * dist;
+            const baseZ = carZ - Math.cos(carRot) * dist;
+            
+            // Left side tree
+            const leftTree = this.createTree();
+            const leftOffset = roadSide + 8 + Math.random() * 15;
+            leftTree.position.set(
+                baseX - Math.cos(carRot) * leftOffset,
+                0,
+                baseZ + Math.sin(carRot) * leftOffset
+            );
+            this.scene.add(leftTree);
+            this.sceneryObjects.push(leftTree);
+            
+            // Right side tree
+            const rightTree = this.createTree();
+            const rightOffset = roadSide + 8 + Math.random() * 15;
+            rightTree.position.set(
+                baseX + Math.cos(carRot) * rightOffset,
+                0,
+                baseZ - Math.sin(carRot) * rightOffset
+            );
+            this.scene.add(rightTree);
+            this.sceneryObjects.push(rightTree);
+        }
+        
+        // Add fences along the road
+        this.createFenceAlongRoad(carX, carZ, carRot, -roadSide - 4, 20, 90);
+        this.createFenceAlongRoad(carX, carZ, carRot, roadSide + 4, 20, 90);
+        
+        // Add a barn on one side
+        const barn = this.createBarn();
+        const barnSide = Math.random() > 0.5 ? 1 : -1;
+        const barnDist = 50 + Math.random() * 30;
+        barn.position.set(
+            carX - Math.sin(carRot) * barnDist + Math.cos(carRot) * barnSide * 50,
+            0,
+            carZ - Math.cos(carRot) * barnDist - Math.sin(carRot) * barnSide * 50
+        );
+        barn.rotation.y = carRot + Math.random() * 0.5 - 0.25;
+        this.scene.add(barn);
+        this.sceneryObjects.push(barn);
+        
+        // Add hay bales
+        for (let i = 0; i < 4; i++) {
+            const hay = this.createHayBale();
+            const side = i % 2 === 0 ? -1 : 1;
+            const dist = 30 + i * 15 + Math.random() * 10;
+            hay.position.set(
+                carX - Math.sin(carRot) * dist + Math.cos(carRot) * side * (30 + Math.random() * 20),
+                0,
+                carZ - Math.cos(carRot) * dist - Math.sin(carRot) * side * (30 + Math.random() * 20)
+            );
+            this.scene.add(hay);
+            this.sceneryObjects.push(hay);
+        }
+    }
+    
+    createFenceAlongRoad(carX, carZ, carRot, sideOffset, startDist, endDist) {
+        const fenceGroup = new THREE.Group();
+        const postMat = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+        const railMat = new THREE.MeshLambertMaterial({ color: 0x654321 });
+        
+        const postSpacing = 8;
+        const posts = [];
+        
+        for (let dist = startDist; dist < endDist; dist += postSpacing) {
+            const px = carX - Math.sin(carRot) * dist + Math.cos(carRot) * sideOffset;
+            const pz = carZ - Math.cos(carRot) * dist - Math.sin(carRot) * sideOffset;
+            
+            const postGeo = new THREE.CylinderGeometry(0.1, 0.12, 1.5, 6);
+            const post = new THREE.Mesh(postGeo, postMat);
+            post.position.set(px, 0.75, pz);
+            post.castShadow = true;
+            fenceGroup.add(post);
+            posts.push({ x: px, z: pz });
+        }
+        
+        // Rails between posts
+        for (let i = 0; i < posts.length - 1; i++) {
+            const p1 = posts[i];
+            const p2 = posts[i + 1];
+            const dx = p2.x - p1.x;
+            const dz = p2.z - p1.z;
+            const length = Math.sqrt(dx * dx + dz * dz);
+            const angle = Math.atan2(dx, dz);
+            
+            const railGeo = new THREE.BoxGeometry(0.08, 0.08, length);
+            
+            const topRail = new THREE.Mesh(railGeo, railMat);
+            topRail.position.set((p1.x + p2.x) / 2, 1.3, (p1.z + p2.z) / 2);
+            topRail.rotation.y = angle;
+            fenceGroup.add(topRail);
+            
+            const bottomRail = new THREE.Mesh(railGeo, railMat);
+            bottomRail.position.set((p1.x + p2.x) / 2, 0.6, (p1.z + p2.z) / 2);
+            bottomRail.rotation.y = angle;
+            fenceGroup.add(bottomRail);
+        }
+        
+        this.scene.add(fenceGroup);
+        this.sceneryObjects.push(fenceGroup);
     }
     
     showNextIntersection() {
