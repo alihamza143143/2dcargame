@@ -83,6 +83,11 @@ class GameController {
         this.elements.endMessage = document.getElementById('end-message');
         this.elements.ctaButton = document.getElementById('cta-button');
         this.elements.playAgainBtn = document.getElementById('play-again');
+        
+        // Pause elements
+        this.elements.pauseBtn = document.getElementById('pause-btn');
+        this.elements.pauseOverlay = document.getElementById('pause-overlay');
+        this.elements.resumeBtn = document.getElementById('resume-btn');
     }
     
     bindEvents() {
@@ -112,6 +117,14 @@ class GameController {
         
         // Play again button
         this.elements.playAgainBtn.addEventListener('click', this.handlePlayAgain);
+        
+        // Pause/resume buttons
+        if (this.elements.pauseBtn) {
+            this.elements.pauseBtn.addEventListener('click', () => this.togglePause());
+        }
+        if (this.elements.resumeBtn) {
+            this.elements.resumeBtn.addEventListener('click', () => this.togglePause());
+        }
     }
     
     initRenderer() {
@@ -126,6 +139,22 @@ class GameController {
         gameRenderer.onArrivalComplete = () => {
             this.showEndScreen();
         };
+    }
+    
+    // === PAUSE / RESUME ===
+    
+    togglePause() {
+        const isPaused = gameRenderer.togglePause();
+        
+        if (this.elements.pauseOverlay) {
+            if (isPaused) {
+                this.elements.pauseOverlay.classList.add('visible');
+                this.elements.pauseBtn.textContent = '▶';
+            } else {
+                this.elements.pauseOverlay.classList.remove('visible');
+                this.elements.pauseBtn.textContent = '⏸';
+            }
+        }
     }
     
     // === SCREEN MANAGEMENT ===
@@ -337,8 +366,19 @@ class GameController {
         // Hide the feedback toast
         this.elements.feedbackToast.classList.remove('visible');
         
-        // Now trigger the turn animation
-        if (this.pendingDirection) {
+        // Check if the last answer was wrong — trigger pothole bump as consequence
+        const lastAnswer = this.answers[this.answers.length - 1];
+        const wasWrong = lastAnswer && !lastAnswer.isCorrect;
+        
+        if (wasWrong && this.pendingDirection) {
+            // Wrong answer → car hits a pothole, then turns
+            const dir = this.pendingDirection;
+            this.pendingDirection = null;
+            gameRenderer.triggerBump(() => {
+                gameRenderer.turn(dir);
+            });
+        } else if (this.pendingDirection) {
+            // Correct answer → smooth turn directly
             gameRenderer.turn(this.pendingDirection);
             this.pendingDirection = null;
         }
@@ -356,11 +396,11 @@ class GameController {
             this.isTransitioning = false;
         } else {
             // Car is now driving on new road segment
-            // Show next intersection ahead after short drive
+            // Show next intersection ahead after a comfortable driving stretch
             setTimeout(() => {
                 gameRenderer.showNextIntersection();
                 gameRenderer.approachIntersection();
-            }, 1800);
+            }, 3500);
             // onStopAtIntersection callback will show the scenario
             this.isTransitioning = false;
         }

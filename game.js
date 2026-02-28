@@ -46,6 +46,8 @@ class GameRenderer {
         this.parkingSpot = null;
         this.parkingStartPos = null;
         this.parkingStartRot = 0;
+        this.parkingTargetRot = 0;
+        this.parkingWaitStarted = false;
         this.destinationBarn = null;
         
         // Road constants
@@ -67,6 +69,16 @@ class GameRenderer {
         this.currentRoadSceneryCreated = false;
         this.pregenSceneryCreated = false;
         
+        // Pothole/bump state
+        this.bumpProgress = 0;
+        this.isBumping = false;
+        this.bumpCallback = null;
+        this.potholeObjects = [];
+        
+        // Pause state
+        this.paused = false;
+        this.manuallyPaused = false;
+        
         // Callbacks
         this.onTurnComplete = null;
         this.onArrivalComplete = null;
@@ -75,15 +87,15 @@ class GameRenderer {
     
     // Generate random scenery configuration
     getRandomSceneryConfig() {
-        const lakeOptions = ['left', 'right', 'left', 'right', 'none']; // 80% chance of lake
+        const lakeOptions = ['left', 'right', 'left', 'right']; // Always include a lake
         const barnSide = Math.random() > 0.5 ? 'left' : 'right';
-        const treeStyle = Math.random() < 0.33 ? 'green' : (Math.random() < 0.5 ? 'autumn' : 'mixed');
+        const treeStyle = 'green'; // Only assets2 trees
         const fenceType = Math.random() > 0.5 ? 'long' : 'short';
         
         return {
             lakeSide: lakeOptions[Math.floor(Math.random() * lakeOptions.length)],
             barnSide: barnSide,
-            treeStyle: treeStyle, // 'green', 'autumn', or 'mixed'
+            treeStyle: treeStyle, // Only assets2 trees
             fenceType: fenceType,
             bushCount: 8 + Math.floor(Math.random() * 8), // 8-15 bushes
             rockCount: 4 + Math.floor(Math.random() * 6), // 4-9 rocks
@@ -95,26 +107,41 @@ class GameRenderer {
     loadTextures() {
         const loader = new THREE.TextureLoader();
         const textureFiles = {
-            sky: 'assets/sky.png',
-            hillsFar: 'assets/hills-far.png',
-            hillsMid: 'assets/hills-mid.png',
-            hillsNear: 'assets/hills-near.png',
-            treeGreen1: 'assets/tree-green-1.png',
-            treeGreen2: 'assets/tree-green-2.png',
-            treeGreen3: 'assets/tree-green-3.png',
-            treeAutumn1: 'assets/tree-autumn-1.png',
-            treeAutumn2: 'assets/tree-autumn-2.png',
-            treeAutumn3: 'assets/tree-autumn-3.png',
+            // Hills from assets2
+            hillsFar: 'assets2/hills-far.png',
+            hillsMid: 'assets2/hills-mid.png',
+            hillsNear: 'assets2/hills-near.png',
+            // Primary trees from assets2 (always more prominent & in front)
+            tree1: 'assets2/Tree 1.png',
+            tree2: 'assets2/Tree 2.png',
+            tree3: 'assets2/Tree 3.png',
+            // Barn from assets (not in assets2)
             barn: 'assets/barn.png',
-            fenceLong: 'assets/fence-long.png',
-            fenceShort: 'assets/fence-short.png',
-            lake: 'assets/lake.png',
-            bushSmall: 'assets/bush-small.png',
-            bushMedium: 'assets/bush-medium.png',
-            bushLarge: 'assets/bush-large.png',
+            // Fences from assets2
+            fenceLong: 'assets2/Fence - Long.png',
+            fenceShort: 'assets2/Fence.png',
+            // Lakes from assets2 (two variants)
+            lake1: 'assets2/Lake 1.png',
+            lake2: 'assets2/Lake 2.png',
+            // Bushes from assets2
+            bushSmall: 'assets2/bush-small.png',
+            bushMedium: 'assets2/bush-medium.png',
+            bushLarge: 'assets2/bush-large.png',
+            // Rocks from assets (not in assets2)
             rockSmall: 'assets/rock-small.png',
             rockMedium: 'assets/rock-medium.png',
-            rockLarge: 'assets/rock-large.png'
+            rockLarge: 'assets/rock-large.png',
+            // Car from assets2
+            car: 'assets2/Car.png',
+            // Stop sign from assets2
+            stopSign: 'assets2/Stop Sign.png',
+            // Billboards from assets2 (branding along road)
+            billboard1: 'assets2/Billboard 1.png',
+            billboard2: 'assets2/Billboard 2.png',
+            // Houses from assets2 (roadside scenery)
+            house1: 'assets2/House 1.png',
+            house2: 'assets2/House 2.png',
+            house3: 'assets2/House 3.png'
         };
         
         const promises = Object.entries(textureFiles).map(([key, path]) => {
@@ -152,19 +179,20 @@ class GameRenderer {
             this.createSkyGradient();
             
             // Set scene background to match sky horizon color (prevents black)
-            this.scene.background = new THREE.Color(0xE5DDB0);
+            this.scene.background = new THREE.Color(0x87CEEB);
             
-            // Minimal fog to keep sky visible
-            this.scene.fog = new THREE.Fog(0xE0D8C0, 400, 800);
+            // Push fog very far back — only for blending distant objects, not for atmosphere
+            this.scene.fog = new THREE.Fog(0xA8D8EA, 600, 1200);
         
-            this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1500);
             
             this.renderer = new THREE.WebGLRenderer({ antialias: true });
             this.renderer.setSize(window.innerWidth, window.innerHeight);
             this.renderer.shadowMap.enabled = true;
             this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-            this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-            this.renderer.toneMappingExposure = 1.2;
+            // No tone mapping — preserves original vibrant colors without foggy/smoky wash
+            this.renderer.toneMapping = THREE.NoToneMapping;
+            this.renderer.toneMappingExposure = 1.0;
             this.container.appendChild(this.renderer.domElement);
             
             // Build scene
@@ -182,20 +210,33 @@ class GameRenderer {
             this.animate();
             
             window.addEventListener('resize', () => this.onResize());
+            
+            // Pause game when tab is hidden to prevent time jumps
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    this.pauseForVisibility();
+                } else {
+                    this.resumeFromVisibility();
+                }
+            });
+            
+            // Also handle window blur/focus as fallback
+            window.addEventListener('blur', () => this.pauseForVisibility());
+            window.addEventListener('focus', () => this.resumeFromVisibility());
         });
     }
     
     setupLighting() {
-        // Soft even lighting for 2D illustrated look
-        const ambient = new THREE.AmbientLight(0xE8E0D0, 0.7);
+        // Bright natural ambient lighting
+        const ambient = new THREE.AmbientLight(0xFFFFFF, 0.75);
         this.scene.add(ambient);
         
-        // Hemisphere light for natural color blending - muted tones
-        const hemiLight = new THREE.HemisphereLight(0xC8D4C8, 0x8B9E6B, 0.5);
+        // Hemisphere light — bright sky blue on top, warm ground green below
+        const hemiLight = new THREE.HemisphereLight(0x87CEEB, 0x6B8E50, 0.6);
         this.scene.add(hemiLight);
         
-        // Soft directional light - not too harsh
-        const sun = new THREE.DirectionalLight(0xFFF5E0, 0.8);
+        // Warm sunlight
+        const sun = new THREE.DirectionalLight(0xFFFAF0, 0.9);
         sun.position.set(60, 80, -80);
         sun.castShadow = true;
         sun.shadow.mapSize.width = 2048;
@@ -223,31 +264,34 @@ class GameRenderer {
         canvas.height = 512;
         const ctx = canvas.getContext('2d');
         
-        // Clean 2D illustrated gradient - warm muted tones matching reference
+        // Bright natural sky — blue top fading to warm horizon
         const gradient = ctx.createLinearGradient(0, 0, 0, 512);
-        gradient.addColorStop(0, '#B8CCD8');    // Muted pale blue at top
-        gradient.addColorStop(0.25, '#C8D8D0'); // Soft sage
-        gradient.addColorStop(0.5, '#D8E0C8');  // Pale green-beige
-        gradient.addColorStop(0.7, '#E0DCC0');  // Warm cream
-        gradient.addColorStop(0.85, '#E8E0B8'); // Sandy beige
-        gradient.addColorStop(1, '#E5DDB0');    // Warm horizon
+        gradient.addColorStop(0, '#5DADE2');    // Vivid sky blue at top
+        gradient.addColorStop(0.2, '#85C1E9');  // Lighter blue
+        gradient.addColorStop(0.45, '#AED6F1'); // Pale blue
+        gradient.addColorStop(0.65, '#D4E6F1'); // Very light blue
+        gradient.addColorStop(0.8, '#E8F0F2');  // Near-white haze
+        gradient.addColorStop(1, '#A8D8EA');    // Soft horizon blue
         
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, 512, 512);
         
-        // Add very subtle soft clouds - minimal like reference
-        ctx.globalAlpha = 0.25;
+        // Soft white clouds
+        ctx.globalAlpha = 0.4;
         ctx.fillStyle = '#FFFFFF';
         ctx.beginPath();
-        ctx.ellipse(150, 180, 100, 25, 0, 0, Math.PI * 2);
+        ctx.ellipse(120, 160, 110, 28, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.beginPath();
-        ctx.ellipse(380, 160, 90, 22, 0, 0, Math.PI * 2);
+        ctx.ellipse(350, 140, 95, 24, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(240, 200, 80, 20, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalAlpha = 1;
         
         const skyTexture = new THREE.CanvasTexture(canvas);
-        const skyGeo = new THREE.SphereGeometry(500, 32, 32);
+        const skyGeo = new THREE.SphereGeometry(700, 32, 32);
         const skyMat = new THREE.MeshBasicMaterial({
             map: skyTexture,
             side: THREE.BackSide
@@ -297,30 +341,107 @@ class GameRenderer {
     }
     
     createHills() {
-        // Create layered rolling hills - on distant horizon, not too close
         this.hillGroup = new THREE.Group();
         
-        const hillConfigs = [
-            // Background hills - pushed back to stay on horizon
-            { x: -120, z: -220, height: 25, color: 0x6B8B5A },
-            { x: 0, z: -240, height: 35, color: 0x5C7D4C },
-            { x: 120, z: -225, height: 28, color: 0x6B8B5A },
-            { x: -60, z: -210, height: 22, color: 0x5C7D4C },
-            { x: 60, z: -215, height: 24, color: 0x6B8B5A },
-            // Additional hills spread wider
-            { x: -180, z: -200, height: 20, color: 0x6B9450 },
-            { x: 180, z: -205, height: 22, color: 0x6B9450 },
-        ];
-        
-        hillConfigs.forEach(cfg => {
-            const hillGeo = new THREE.SphereGeometry(cfg.height, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
-            const hillMat = new THREE.MeshLambertMaterial({ color: cfg.color });
-            const hill = new THREE.Mesh(hillGeo, hillMat);
-            hill.position.set(cfg.x, 0, cfg.z);
-            hill.scale.set(3, 0.8, 2); // Wider but shorter
-            hill.receiveShadow = true;
-            this.hillGroup.add(hill);
-        });
+        // Hills as a 360-degree panorama ring surrounding the entire scene.
+        // Panels face inward so hills are visible from every direction.
+        // hillGroup only TRANSLATES with the car (no rotation) so hills stay static.
+        if (this.textures.hillsFar || this.textures.hillsMid || this.textures.hillsNear) {
+            const panelCount = 8;
+            const angleStep = (Math.PI * 2) / panelCount;
+            
+            // Far hills — outermost ring
+            if (this.textures.hillsFar) {
+                const radius = 400;
+                for (let i = 0; i < panelCount; i++) {
+                    const angle = i * angleStep;
+                    const farMat = new THREE.MeshBasicMaterial({
+                        map: this.textures.hillsFar,
+                        transparent: true,
+                        alphaTest: 0.05,
+                        side: THREE.DoubleSide,
+                        depthWrite: false
+                    });
+                    const chordWidth = 2 * radius * Math.sin(angleStep / 2) + 20;
+                    const farGeo = new THREE.PlaneGeometry(chordWidth, 80);
+                    const farPlane = new THREE.Mesh(farGeo, farMat);
+                    farPlane.position.set(
+                        Math.sin(angle) * radius,
+                        30,
+                        Math.cos(angle) * radius
+                    );
+                    farPlane.rotation.y = angle + Math.PI;
+                    this.hillGroup.add(farPlane);
+                }
+            }
+            
+            // Mid hills — middle ring (offset for layering)
+            if (this.textures.hillsMid) {
+                const radius = 340;
+                for (let i = 0; i < panelCount; i++) {
+                    const angle = i * angleStep + angleStep * 0.5;
+                    const midMat = new THREE.MeshBasicMaterial({
+                        map: this.textures.hillsMid,
+                        transparent: true,
+                        alphaTest: 0.05,
+                        side: THREE.DoubleSide,
+                        depthWrite: false
+                    });
+                    const chordWidth = 2 * radius * Math.sin(angleStep / 2) + 15;
+                    const midGeo = new THREE.PlaneGeometry(chordWidth, 60);
+                    const midPlane = new THREE.Mesh(midGeo, midMat);
+                    midPlane.position.set(
+                        Math.sin(angle) * radius,
+                        22,
+                        Math.cos(angle) * radius
+                    );
+                    midPlane.rotation.y = angle + Math.PI;
+                    this.hillGroup.add(midPlane);
+                }
+            }
+            
+            // Near hills — innermost ring
+            if (this.textures.hillsNear) {
+                const radius = 280;
+                for (let i = 0; i < panelCount; i++) {
+                    const angle = i * angleStep + angleStep * 0.25;
+                    const nearMat = new THREE.MeshBasicMaterial({
+                        map: this.textures.hillsNear,
+                        transparent: true,
+                        alphaTest: 0.05,
+                        side: THREE.DoubleSide,
+                        depthWrite: false
+                    });
+                    const chordWidth = 2 * radius * Math.sin(angleStep / 2) + 10;
+                    const nearGeo = new THREE.PlaneGeometry(chordWidth, 45);
+                    const nearPlane = new THREE.Mesh(nearGeo, nearMat);
+                    nearPlane.position.set(
+                        Math.sin(angle) * radius,
+                        15,
+                        Math.cos(angle) * radius
+                    );
+                    nearPlane.rotation.y = angle + Math.PI;
+                    this.hillGroup.add(nearPlane);
+                }
+            }
+        } else {
+            // Fallback: hemisphere hills in a ring
+            const hillCount = 12;
+            const radius = 300;
+            for (let i = 0; i < hillCount; i++) {
+                const angle = (i / hillCount) * Math.PI * 2;
+                const height = 20 + Math.random() * 15;
+                const hillGeo = new THREE.SphereGeometry(height, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+                const hillMat = new THREE.MeshLambertMaterial({
+                    color: i % 2 === 0 ? 0x6B8B5A : 0x5C7D4C
+                });
+                const hill = new THREE.Mesh(hillGeo, hillMat);
+                hill.position.set(Math.sin(angle) * radius, 0, Math.cos(angle) * radius);
+                hill.scale.set(3, 0.8, 2);
+                hill.receiveShadow = true;
+                this.hillGroup.add(hill);
+            }
+        }
         
         this.scene.add(this.hillGroup);
     }
@@ -574,8 +695,8 @@ class GameRenderer {
         const roadSide = this.ROAD_WIDTH / 2 + 8; // Larger buffer
         
         // === LEFT ROAD SCENERY ===
-        // Trees along left road - far from road
-        for (let x = -junctionEdge - 30; x > -120; x -= 18) {
+        // Trees along left road - far from road, START FAR from junction
+        for (let x = -junctionEdge - 50; x > -140; x -= 18) {
             const tree1 = this.createTree();
             tree1.position.set(x, 0, -roadSide - 15 - Math.random() * 10);
             this.intersectionGroup.add(tree1);
@@ -584,13 +705,13 @@ class GameRenderer {
             tree2.position.set(x - 5, 0, roadSide + 15 + Math.random() * 10);
             this.intersectionGroup.add(tree2);
         }
-        // Fences along left road - START FAR from junction to not block entrance
-        this.createIntersectionFence(-junctionEdge - 55, -100, -roadSide - 6, 'horizontal');
-        this.createIntersectionFence(-junctionEdge - 55, -100, roadSide + 6, 'horizontal');
+        // Fences along left road - start well after the junction cross-road opening
+        this.createIntersectionFence(-junctionEdge - 40, -150, -roadSide - 6, 'horizontal');
+        this.createIntersectionFence(-junctionEdge - 40, -150, roadSide + 6, 'horizontal');
         
         // === RIGHT ROAD SCENERY ===
-        // Trees along right road - far from road
-        for (let x = junctionEdge + 30; x < 120; x += 18) {
+        // Trees along right road - far from road, START FAR from junction
+        for (let x = junctionEdge + 50; x < 140; x += 18) {
             const tree1 = this.createTree();
             tree1.position.set(x, 0, -roadSide - 15 - Math.random() * 10);
             this.intersectionGroup.add(tree1);
@@ -599,13 +720,13 @@ class GameRenderer {
             tree2.position.set(x + 5, 0, roadSide + 15 + Math.random() * 10);
             this.intersectionGroup.add(tree2);
         }
-        // Fences along right road - START FAR from junction to not block entrance
-        this.createIntersectionFence(junctionEdge + 55, 100, -roadSide - 6, 'horizontal');
-        this.createIntersectionFence(junctionEdge + 55, 100, roadSide + 6, 'horizontal');
+        // Fences along right road - start well after the junction cross-road opening
+        this.createIntersectionFence(junctionEdge + 40, 150, -roadSide - 6, 'horizontal');
+        this.createIntersectionFence(junctionEdge + 40, 150, roadSide + 6, 'horizontal');
         
         // === STRAIGHT ROAD SCENERY ===
-        // Trees along straight road - far from road
-        for (let z = -junctionEdge - 30; z > -120; z -= 18) {
+        // Trees along straight road - far from road, START FAR from junction
+        for (let z = -junctionEdge - 50; z > -140; z -= 18) {
             const tree1 = this.createTree();
             tree1.position.set(-roadSide - 15 - Math.random() * 10, 0, z);
             this.intersectionGroup.add(tree1);
@@ -614,9 +735,15 @@ class GameRenderer {
             tree2.position.set(roadSide + 15 + Math.random() * 10, 0, z - 5);
             this.intersectionGroup.add(tree2);
         }
-        // Fences along straight road - START FAR from junction
-        this.createIntersectionFence(-junctionEdge - 55, -100, -roadSide - 6, 'vertical-left');
-        this.createIntersectionFence(-junctionEdge - 55, -100, roadSide + 6, 'vertical-right');
+        // Fences along straight road - start well after the junction cross-road opening
+        this.createIntersectionFence(-junctionEdge - 40, -150, -roadSide - 6, 'vertical-left');
+        this.createIntersectionFence(-junctionEdge - 40, -150, roadSide + 6, 'vertical-right');
+        
+        // === BACK ROAD FENCES (where car comes from) - only beyond the junction edge ===
+        // These run along Z axis from junctionEdge outward, on both sides of the back road
+        // They do NOT extend into the junction area, so left/right cross-roads stay open
+        this.createIntersectionFence(junctionEdge + 40, 80, -roadSide - 6, 'vertical-left');
+        this.createIntersectionFence(junctionEdge + 40, 80, roadSide + 6, 'vertical-right');
         
         // === BARNS near intersection - one barn far from road, removed rotation since PlaneGeometry needs to face camera ===
         const barn1 = this.createBarn();
@@ -752,41 +879,53 @@ class GameRenderer {
         post.castShadow = true;
         signGroup.add(post);
         
-        // Octagon stop sign
-        const signShape = new THREE.Shape();
-        for (let i = 0; i < 8; i++) {
-            const angle = (i / 8) * Math.PI * 2 - Math.PI / 8;
-            const px = Math.cos(angle) * 0.9;
-            const py = Math.sin(angle) * 0.9;
-            if (i === 0) signShape.moveTo(px, py);
-            else signShape.lineTo(px, py);
+        if (this.textures.stopSign) {
+            // Use Stop Sign PNG - face the approaching car (from +z direction)
+            const material = new THREE.MeshBasicMaterial({
+                map: this.textures.stopSign,
+                transparent: true,
+                alphaTest: 0.1,
+                side: THREE.DoubleSide
+            });
+            const planeGeo = new THREE.PlaneGeometry(1.8, 1.8);
+            const signPlane = new THREE.Mesh(planeGeo, material);
+            signPlane.position.y = 3.8;
+            // No rotation - default plane faces +z which is toward approaching car
+            signGroup.add(signPlane);
+        } else {
+            // Fallback: 3D octagon
+            const signShape = new THREE.Shape();
+            for (let i = 0; i < 8; i++) {
+                const angle = (i / 8) * Math.PI * 2 - Math.PI / 8;
+                const px = Math.cos(angle) * 0.9;
+                const py = Math.sin(angle) * 0.9;
+                if (i === 0) signShape.moveTo(px, py);
+                else signShape.lineTo(px, py);
+            }
+            signShape.closePath();
+            const signGeo = new THREE.ExtrudeGeometry(signShape, { depth: 0.05, bevelEnabled: false });
+            const signMat = new THREE.MeshLambertMaterial({ color: 0xCC0000 });
+            const sign = new THREE.Mesh(signGeo, signMat);
+            sign.position.y = 3.8;
+            sign.rotation.y = Math.PI;
+            signGroup.add(sign);
+            
+            const borderShape = new THREE.Shape();
+            for (let i = 0; i < 8; i++) {
+                const angle = (i / 8) * Math.PI * 2 - Math.PI / 8;
+                const px = Math.cos(angle) * 0.75;
+                const py = Math.sin(angle) * 0.75;
+                if (i === 0) borderShape.moveTo(px, py);
+                else borderShape.lineTo(px, py);
+            }
+            borderShape.closePath();
+            const borderGeo = new THREE.ShapeGeometry(borderShape);
+            const borderMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF, side: THREE.DoubleSide });
+            const border = new THREE.Mesh(borderGeo, borderMat);
+            border.position.set(0, 3.8, 0.06);
+            border.rotation.y = Math.PI;
+            signGroup.add(border);
         }
-        signShape.closePath();
-        
-        const signGeo = new THREE.ExtrudeGeometry(signShape, { depth: 0.05, bevelEnabled: false });
-        const signMat = new THREE.MeshLambertMaterial({ color: 0xCC0000 });
-        const sign = new THREE.Mesh(signGeo, signMat);
-        sign.position.y = 3.8;
-        sign.rotation.y = Math.PI;
-        signGroup.add(sign);
-        
-        // White border
-        const borderShape = new THREE.Shape();
-        for (let i = 0; i < 8; i++) {
-            const angle = (i / 8) * Math.PI * 2 - Math.PI / 8;
-            const px = Math.cos(angle) * 0.75;
-            const py = Math.sin(angle) * 0.75;
-            if (i === 0) borderShape.moveTo(px, py);
-            else borderShape.lineTo(px, py);
-        }
-        borderShape.closePath();
-        
-        const borderGeo = new THREE.ShapeGeometry(borderShape);
-        const borderMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF, side: THREE.DoubleSide });
-        const border = new THREE.Mesh(borderGeo, borderMat);
-        border.position.set(0, 3.8, 0.06);
-        border.rotation.y = Math.PI;
-        signGroup.add(border);
         
         signGroup.position.set(x, 0, z);
         this.intersectionGroup.add(signGroup);
@@ -813,37 +952,39 @@ class GameRenderer {
             return;
         }
         
-        // Create lake using PNG texture on a flat plane
+        // Create lake using PNG texture on a flat plane - randomly pick variant
         const lakeGroup = new THREE.Group();
         const carZ = this.car ? this.car.position.z : 70;
         const carX = this.car ? this.car.position.x : 0;
         
-        if (this.textures.lake) {
-            // Use plane geometry for lake so it lays flat on ground
+        const lakeTex = Math.random() > 0.5 ? this.textures.lake1 : this.textures.lake2;
+        
+        if (lakeTex) {
             const material = new THREE.MeshBasicMaterial({
-                map: this.textures.lake,
+                map: lakeTex,
                 transparent: true,
-                alphaTest: 0.1,
-                side: THREE.DoubleSide
+                alphaTest: 0.05,
+                side: THREE.DoubleSide,
+                depthWrite: false
             });
             
-            // Position lake based on config - far from road
-            const lakeSize = 25 + Math.random() * 10;
-            const planeGeo = new THREE.PlaneGeometry(lakeSize, lakeSize * 0.7);
+            const lakeSize = 30 + Math.random() * 12;
+            const planeGeo = new THREE.PlaneGeometry(lakeSize, lakeSize * 0.65);
             const lake = new THREE.Mesh(planeGeo, material);
-            lake.rotation.x = -Math.PI / 2; // Lay flat
+            lake.rotation.x = -Math.PI / 2;
             
-            const xOffset = config.lakeSide === 'left' ? -55 : 55;
-            lake.position.set(carX + xOffset, 0.15, carZ - 15);
+            // Position closer to road and further ahead for visibility
+            const xOffset = config.lakeSide === 'left' ? -35 : 35;
+            lake.position.set(carX + xOffset, 0.12, carZ - 30);
             lakeGroup.add(lake);
         } else {
-            // Fallback to 3D lake - far from road
+            // Fallback to 3D lake
             const waterGeo = new THREE.CircleGeometry(20, 32);
             const waterMat = new THREE.MeshLambertMaterial({ color: 0x5A8A9A });
             const water = new THREE.Mesh(waterGeo, waterMat);
             water.rotation.x = -Math.PI / 2;
-            const xOffset = config.lakeSide === 'left' ? -55 : 55;
-            water.position.set(carX + xOffset, 0.1, carZ - 15);
+            const xOffset = config.lakeSide === 'left' ? -35 : 35;
+            water.position.set(carX + xOffset, 0.1, carZ - 30);
             lakeGroup.add(water);
         }
         
@@ -879,17 +1020,33 @@ class GameRenderer {
             this.sceneryObjects.push(rightTree);
         }
         
-        // Fences along both sides - START with gap for intersection opening
-        this.createFence(carX - roadSide - 8, carZ - 25, carZ - 70, 'left', fenceType);
-        this.createFence(carX + roadSide + 8, carZ - 25, carZ - 70, 'right', fenceType);
+        // Fences along both sides - STOP before intersection so cross-road openings are clear
+        this.createFence(carX - roadSide - 8, carZ - 25, carZ - 55, 'left', fenceType);
+        this.createFence(carX + roadSide + 8, carZ - 25, carZ - 55, 'right', fenceType);
         
         // Single barn on configured side - CLOSER to road for visibility
         const barn = this.createBarn();
         const barnX = barnSide === 'left' ? carX - 35 : carX + 35;
         barn.position.set(barnX, 0, carZ - 40);
-        // No rotation needed for initial road (faces default direction)
+        barn.rotation.y = this.car ? this.car.rotation.y : 0; // Face toward camera
         this.scene.add(barn);
         this.sceneryObjects.push(barn);
+        
+        // House on opposite side of barn for Tennessee residential feel
+        const house = this.createHouse();
+        const houseX = barnSide === 'left' ? carX + 40 : carX - 40;
+        house.position.set(houseX, 0, carZ - 55);
+        house.rotation.y = this.car ? this.car.rotation.y : 0;
+        this.scene.add(house);
+        this.sceneryObjects.push(house);
+        
+        // Billboard along the road (branding per specs)
+        const billboard = this.createBillboard();
+        const bbSide = Math.random() > 0.5 ? -1 : 1;
+        billboard.position.set(carX + bbSide * (roadSide + 15), 0, carZ - 60);
+        billboard.rotation.y = this.car ? this.car.rotation.y : 0;
+        this.scene.add(billboard);
+        this.sceneryObjects.push(billboard);
         
         // Additional scattered trees in fields - MINIMUM 40 from road center, only AHEAD
         for (let i = 0; i < treeCount; i++) {
@@ -1013,31 +1170,12 @@ class GameRenderer {
     createTree(style = 'mixed') {
         const tree = new THREE.Group();
         
-        // Select tree textures based on style
-        let treeTextures = [];
-        if (style === 'green') {
-            treeTextures = [
-                this.textures.treeGreen1,
-                this.textures.treeGreen2,
-                this.textures.treeGreen3,
-            ].filter(t => t);
-        } else if (style === 'autumn') {
-            treeTextures = [
-                this.textures.treeAutumn1,
-                this.textures.treeAutumn2,
-                this.textures.treeAutumn3,
-            ].filter(t => t);
-        } else {
-            // Mixed - use all
-            treeTextures = [
-                this.textures.treeGreen1,
-                this.textures.treeGreen2,
-                this.textures.treeGreen3,
-                this.textures.treeAutumn1,
-                this.textures.treeAutumn2,
-                this.textures.treeAutumn3,
-            ].filter(t => t);
-        }
+        // Only use assets2 trees (Tree 1/2/3)
+        const treeTextures = [
+            this.textures.tree1,
+            this.textures.tree2,
+            this.textures.tree3,
+        ].filter(t => t);
         
         if (treeTextures.length > 0) {
             const selectedTexture = treeTextures[Math.floor(Math.random() * treeTextures.length)];
@@ -1056,7 +1194,7 @@ class GameRenderer {
             tree.add(sprite);
         } else {
             // Fallback to 3D tree if PNGs not loaded
-            const treeType = style === 'autumn' ? 0 : (style === 'green' ? 1 : Math.random());
+            const treeType = Math.random();
             
             // Trunk
             const trunkGeo = new THREE.CylinderGeometry(0.2, 0.3, 3, 8);
@@ -1169,9 +1307,11 @@ class GameRenderer {
             const width = 20;
             const height = 16;
             const planeGeo = new THREE.PlaneGeometry(width, height);
+            // Shift geometry so bottom edge is at local y=0 (grounded)
+            planeGeo.translate(0, height / 2, 0);
             const plane = new THREE.Mesh(planeGeo, material);
-            // Position so bottom edge touches ground - adjust for PNG padding
-            plane.position.y = height / 2 - 4; // Lower by 4 units to firmly ground it
+            // Push down slightly to bury the transparent bottom pixels of the PNG
+            plane.position.y = -1.5;
             barn.add(plane);
         } else {
             // Fallback to 3D barn
@@ -1221,260 +1361,138 @@ class GameRenderer {
         return barn;
     }
     
-    createHayBale() {
-        const hayGroup = new THREE.Group();
+    createBillboard() {
+        const billboard = new THREE.Group();
         
-        const hayMat = new THREE.MeshLambertMaterial({ color: 0xDAA520 }); // Golden
-        const hayGeo = new THREE.CylinderGeometry(1.2, 1.2, 2, 16);
-        const hay = new THREE.Mesh(hayGeo, hayMat);
-        hay.rotation.z = Math.PI / 2;
-        hay.position.y = 1.2;
-        hay.castShadow = true;
-        hayGroup.add(hay);
+        // Randomly pick billboard variant
+        const bbTextures = [this.textures.billboard1, this.textures.billboard2].filter(t => t);
         
-        return hayGroup;
+        if (bbTextures.length > 0) {
+            const selectedTexture = bbTextures[Math.floor(Math.random() * bbTextures.length)];
+            const material = new THREE.MeshBasicMaterial({
+                map: selectedTexture,
+                transparent: true,
+                alphaTest: 0.1,
+                side: THREE.DoubleSide
+            });
+            
+            // Billboard panel
+            const panelGeo = new THREE.PlaneGeometry(10, 6);
+            const panel = new THREE.Mesh(panelGeo, material);
+            panel.position.y = 9; // Elevated on posts
+            billboard.add(panel);
+            
+            // Two support posts
+            const postMat = new THREE.MeshLambertMaterial({ color: 0x666666 });
+            const postGeo = new THREE.CylinderGeometry(0.15, 0.18, 7, 8);
+            const leftPost = new THREE.Mesh(postGeo, postMat);
+            leftPost.position.set(-3, 3.5, 0);
+            leftPost.castShadow = true;
+            billboard.add(leftPost);
+            
+            const rightPost = new THREE.Mesh(postGeo, postMat);
+            rightPost.position.set(3, 3.5, 0);
+            rightPost.castShadow = true;
+            billboard.add(rightPost);
+        } else {
+            // Fallback: colored rectangle with text shape
+            const panelMat = new THREE.MeshLambertMaterial({ color: 0xF5A623 });
+            const panelGeo = new THREE.BoxGeometry(10, 5, 0.3);
+            const panel = new THREE.Mesh(panelGeo, panelMat);
+            panel.position.y = 8;
+            billboard.add(panel);
+            
+            const postMat = new THREE.MeshLambertMaterial({ color: 0x666666 });
+            const postGeo = new THREE.CylinderGeometry(0.15, 0.18, 6, 8);
+            const post = new THREE.Mesh(postGeo, postMat);
+            post.position.set(0, 3, 0);
+            billboard.add(post);
+        }
+        
+        return billboard;
+    }
+    
+    createHouse() {
+        const house = new THREE.Group();
+        
+        // Randomly pick house variant
+        const houseTextures = [
+            this.textures.house1, 
+            this.textures.house2, 
+            this.textures.house3
+        ].filter(t => t);
+        
+        if (houseTextures.length > 0) {
+            const selectedTexture = houseTextures[Math.floor(Math.random() * houseTextures.length)];
+            const material = new THREE.MeshBasicMaterial({
+                map: selectedTexture,
+                transparent: true,
+                alphaTest: 0.1,
+                side: THREE.DoubleSide
+            });
+            
+            const width = 14;
+            const height = 12;
+            const planeGeo = new THREE.PlaneGeometry(width, height);
+            const plane = new THREE.Mesh(planeGeo, material);
+            // Position so bottom sits on ground
+            plane.position.y = height / 2 - 1;
+            house.add(plane);
+        } else {
+            // Fallback: simple 3D house
+            const wallMat = new THREE.MeshLambertMaterial({ color: 0xDEB887 });
+            const wallsGeo = new THREE.BoxGeometry(8, 6, 8);
+            const walls = new THREE.Mesh(wallsGeo, wallMat);
+            walls.position.y = 3;
+            house.add(walls);
+            
+            const roofMat = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+            const roofGeo = new THREE.ConeGeometry(6.5, 3, 4);
+            const roof = new THREE.Mesh(roofGeo, roofMat);
+            roof.position.y = 7.5;
+            roof.rotation.y = Math.PI / 4;
+            house.add(roof);
+        }
+        
+        return house;
     }
     
     createCar() {
         this.car = new THREE.Group();
         
-        // Beautiful classic sedan - warm bronze/copper color
-        const bodyColor = 0xB87333; // Copper bronze
-        const bodyMat = new THREE.MeshPhongMaterial({ 
-            color: bodyColor, 
-            shininess: 100,
-            specular: 0x444444
-        });
-        const chromeMat = new THREE.MeshPhongMaterial({ 
-            color: 0xCCCCCC, 
-            shininess: 150,
-            specular: 0xFFFFFF
-        });
-        const darkMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
-        const glassMat = new THREE.MeshPhongMaterial({ 
-            color: 0x88CCFF, 
-            transparent: true, 
-            opacity: 0.6,
-            shininess: 100 
-        });
-        const lightMat = new THREE.MeshBasicMaterial({ color: 0xFFFFCC });
-        const tailLightMat = new THREE.MeshBasicMaterial({ color: 0xFF3333 });
-        
-        // === MAIN BODY - Lower section with rounded edges ===
-        const bodyWidth = 2.4;
-        const bodyHeight = 0.9;
-        const bodyLength = 4.8;
-        
-        // Main body (box with beveled feel via multiple pieces)
-        const mainBodyGeo = new THREE.BoxGeometry(bodyWidth, bodyHeight, bodyLength);
-        const mainBody = new THREE.Mesh(mainBodyGeo, bodyMat);
-        mainBody.position.set(0, 0.7, 0);
-        mainBody.castShadow = true;
-        this.car.add(mainBody);
-        
-        // Rounded front hood piece
-        const hoodGeo = new THREE.BoxGeometry(bodyWidth - 0.1, 0.15, 1.2);
-        const hood = new THREE.Mesh(hoodGeo, bodyMat);
-        hood.position.set(0, 1.2, -1.6);
-        hood.castShadow = true;
-        this.car.add(hood);
-        
-        // Front bumper area - sloped
-        const frontSlopeGeo = new THREE.BoxGeometry(bodyWidth, 0.4, 0.6);
-        const frontSlope = new THREE.Mesh(frontSlopeGeo, bodyMat);
-        frontSlope.position.set(0, 0.45, -2.5);
-        frontSlope.rotation.x = 0.3;
-        this.car.add(frontSlope);
-        
-        // === CABIN - Greenhouse ===
-        const cabinWidth = 2.2;
-        const cabinHeight = 0.8;
-        const cabinLength = 2.4;
-        
-        const cabinGeo = new THREE.BoxGeometry(cabinWidth, cabinHeight, cabinLength);
-        const cabin = new THREE.Mesh(cabinGeo, bodyMat);
-        cabin.position.set(0, 1.55, 0.2);
-        cabin.castShadow = true;
-        this.car.add(cabin);
-        
-        // === WINDOWS ===
-        // Windshield (angled)
-        const windshieldShape = new THREE.Shape();
-        windshieldShape.moveTo(-0.95, 0);
-        windshieldShape.lineTo(-0.85, 0.7);
-        windshieldShape.lineTo(0.85, 0.7);
-        windshieldShape.lineTo(0.95, 0);
-        windshieldShape.closePath();
-        
-        const windshieldGeo = new THREE.ExtrudeGeometry(windshieldShape, { depth: 0.05, bevelEnabled: false });
-        const windshield = new THREE.Mesh(windshieldGeo, glassMat);
-        windshield.position.set(0, 1.2, -1.03);
-        windshield.rotation.x = -0.45;
-        this.car.add(windshield);
-        
-        // Rear window
-        const rearWindowGeo = new THREE.ExtrudeGeometry(windshieldShape, { depth: 0.05, bevelEnabled: false });
-        const rearWindow = new THREE.Mesh(rearWindowGeo, glassMat);
-        rearWindow.position.set(0, 1.2, 1.43);
-        rearWindow.rotation.x = 0.45;
-        rearWindow.rotation.y = Math.PI;
-        this.car.add(rearWindow);
-        
-        // Side windows (left)
-        const sideWinGeo = new THREE.PlaneGeometry(1.8, 0.55);
-        const leftWin = new THREE.Mesh(sideWinGeo, glassMat);
-        leftWin.position.set(-1.11, 1.6, 0.2);
-        leftWin.rotation.y = Math.PI / 2;
-        this.car.add(leftWin);
-        
-        // Side windows (right)
-        const rightWin = new THREE.Mesh(sideWinGeo, glassMat);
-        rightWin.position.set(1.11, 1.6, 0.2);
-        rightWin.rotation.y = -Math.PI / 2;
-        this.car.add(rightWin);
-        
-        // === WHEELS with hubcaps ===
-        const wheelPositions = [
-            { x: -1.0, z: -1.4 },
-            { x: 1.0, z: -1.4 },
-            { x: -1.0, z: 1.4 },
-            { x: 1.0, z: 1.4 }
-        ];
-        
-        wheelPositions.forEach(pos => {
-            const wheelGroup = new THREE.Group();
-            
-            // Tire
-            const tireGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.32, 24);
-            const tire = new THREE.Mesh(tireGeo, darkMat);
-            tire.rotation.z = Math.PI / 2;
-            tire.castShadow = true;
-            wheelGroup.add(tire);
-            
-            // Hubcap
-            const hubGeo = new THREE.CylinderGeometry(0.28, 0.28, 0.34, 16);
-            const hub = new THREE.Mesh(hubGeo, chromeMat);
-            hub.rotation.z = Math.PI / 2;
-            wheelGroup.add(hub);
-            
-            // Hubcap detail (spokes)
-            for (let i = 0; i < 5; i++) {
-                const spokeGeo = new THREE.BoxGeometry(0.35, 0.05, 0.06);
-                const spoke = new THREE.Mesh(spokeGeo, chromeMat);
-                spoke.rotation.z = (i / 5) * Math.PI;
-                spoke.position.x = pos.x > 0 ? 0.17 : -0.17;
-                wheelGroup.add(spoke);
-            }
-            
-            wheelGroup.position.set(pos.x, 0.42, pos.z);
-            this.car.add(wheelGroup);
-        });
-        
-        // === WHEEL WELLS - Fender arches ===
-        const wellMat = new THREE.MeshLambertMaterial({ color: bodyColor });
-        wheelPositions.forEach(pos => {
-            const wellGeo = new THREE.TorusGeometry(0.5, 0.08, 8, 12, Math.PI);
-            const well = new THREE.Mesh(wellGeo, wellMat);
-            well.rotation.x = Math.PI / 2;
-            well.rotation.z = pos.x > 0 ? -Math.PI / 2 : Math.PI / 2;
-            well.position.set(pos.x > 0 ? bodyWidth / 2 + 0.01 : -bodyWidth / 2 - 0.01, 0.42, pos.z);
-            this.car.add(well);
-        });
-        
-        // === CHROME BUMPERS ===
-        // Front bumper
-        const frontBumperGeo = new THREE.BoxGeometry(bodyWidth + 0.2, 0.15, 0.2);
-        const frontBumper = new THREE.Mesh(frontBumperGeo, chromeMat);
-        frontBumper.position.set(0, 0.35, -2.55);
-        this.car.add(frontBumper);
-        
-        // Rear bumper
-        const rearBumper = new THREE.Mesh(frontBumperGeo, chromeMat);
-        rearBumper.position.set(0, 0.35, 2.45);
-        this.car.add(rearBumper);
-        
-        // === GRILLE ===
-        const grilleGeo = new THREE.BoxGeometry(1.4, 0.4, 0.05);
-        const grille = new THREE.Mesh(grilleGeo, chromeMat);
-        grille.position.set(0, 0.55, -2.43);
-        this.car.add(grille);
-        
-        // Grille slats
-        for (let i = 0; i < 5; i++) {
-            const slatGeo = new THREE.BoxGeometry(1.3, 0.03, 0.06);
-            const slat = new THREE.Mesh(slatGeo, darkMat);
-            slat.position.set(0, 0.4 + i * 0.08, -2.44);
-            this.car.add(slat);
+        if (this.textures.car) {
+            // Use Car.png as a sprite (rear view - auto-faces camera)
+            const material = new THREE.SpriteMaterial({
+                map: this.textures.car,
+                transparent: true,
+                alphaTest: 0.05,
+                sizeAttenuation: true
+            });
+            const sprite = new THREE.Sprite(material);
+            // Scale to match approximate car size (width ~3.5, height ~3.0)
+            sprite.scale.set(4.0, 3.2, 1);
+            // Anchor at bottom center so car sits on road
+            sprite.center.set(0.5, 0.05);
+            sprite.position.y = 0;
+            this.car.add(sprite);
+        } else {
+            // Fallback: simple 3D copper box car
+            const bodyMat = new THREE.MeshPhongMaterial({ color: 0xB87333, shininess: 100 });
+            const mainBody = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.9, 4.8), bodyMat);
+            mainBody.position.set(0, 0.7, 0);
+            this.car.add(mainBody);
+            const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.8, 2.4), bodyMat);
+            cabin.position.set(0, 1.55, 0.2);
+            this.car.add(cabin);
+            // Simple wheels
+            const darkMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+            [[-1, -1.4], [1, -1.4], [-1, 1.4], [1, 1.4]].forEach(([x, z]) => {
+                const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.32, 16), darkMat);
+                tire.rotation.z = Math.PI / 2;
+                tire.position.set(x, 0.42, z);
+                this.car.add(tire);
+            });
         }
-        
-        // === HEADLIGHTS ===
-        const headlightGeo = new THREE.CircleGeometry(0.2, 16);
-        [-0.75, 0.75].forEach(x => {
-            // Chrome ring
-            const ringGeo = new THREE.TorusGeometry(0.22, 0.03, 8, 16);
-            const ring = new THREE.Mesh(ringGeo, chromeMat);
-            ring.position.set(x, 0.65, -2.42);
-            this.car.add(ring);
-            
-            // Light
-            const light = new THREE.Mesh(headlightGeo, lightMat);
-            light.position.set(x, 0.65, -2.41);
-            this.car.add(light);
-        });
-        
-        // === TAILLIGHTS ===
-        const taillightGeo = new THREE.BoxGeometry(0.4, 0.2, 0.05);
-        [-0.85, 0.85].forEach(x => {
-            const taillight = new THREE.Mesh(taillightGeo, tailLightMat);
-            taillight.position.set(x, 0.65, 2.41);
-            this.car.add(taillight);
-        });
-        
-        // === SIDE MIRRORS ===
-        const mirrorMat = bodyMat;
-        [-1.2, 1.2].forEach(x => {
-            const mirrorGroup = new THREE.Group();
-            
-            // Mirror arm
-            const armGeo = new THREE.BoxGeometry(0.08, 0.05, 0.25);
-            const arm = new THREE.Mesh(armGeo, mirrorMat);
-            arm.position.z = -0.12;
-            mirrorGroup.add(arm);
-            
-            // Mirror housing
-            const housingGeo = new THREE.BoxGeometry(0.15, 0.12, 0.08);
-            const housing = new THREE.Mesh(housingGeo, mirrorMat);
-            housing.position.z = -0.28;
-            mirrorGroup.add(housing);
-            
-            // Mirror glass
-            const mirrorGlassGeo = new THREE.PlaneGeometry(0.12, 0.1);
-            const mirrorGlass = new THREE.Mesh(mirrorGlassGeo, glassMat);
-            mirrorGlass.position.set(0, 0, -0.33);
-            mirrorGroup.add(mirrorGlass);
-            
-            mirrorGroup.position.set(x, 1.4, -0.8);
-            this.car.add(mirrorGroup);
-        });
-        
-        // === DOOR HANDLES ===
-        [-1.21, 1.21].forEach(x => {
-            const handleGeo = new THREE.BoxGeometry(0.03, 0.05, 0.2);
-            const handle = new THREE.Mesh(handleGeo, chromeMat);
-            handle.position.set(x, 1.0, 0);
-            this.car.add(handle);
-            
-            // Rear door handle
-            const handle2 = new THREE.Mesh(handleGeo, chromeMat);
-            handle2.position.set(x, 1.0, 0.8);
-            this.car.add(handle2);
-        });
-        
-        // === ROOF EDGE TRIM ===
-        const roofTrimGeo = new THREE.BoxGeometry(cabinWidth + 0.1, 0.03, cabinLength + 0.1);
-        const roofTrim = new THREE.Mesh(roofTrimGeo, chromeMat);
-        roofTrim.position.set(0, 1.96, 0.2);
-        this.car.add(roofTrim);
         
         // Car starting position
         this.car.position.set(0, 0, 70);
@@ -1504,10 +1522,8 @@ class GameRenderer {
             this.sky.position.copy(this.car.position);
         }
         if (this.hillGroup) {
-            // Hills positioned ahead on distant horizon using car's forward direction
-            const hillOffsetX = this.car.position.x - Math.sin(this.car.rotation.y) * 170;
-            const hillOffsetZ = this.car.position.z - Math.cos(this.car.rotation.y) * 170;
-            this.hillGroup.position.set(hillOffsetX, 0, hillOffsetZ);
+            // 360° panorama ring: center on car, NO rotation
+            this.hillGroup.position.set(this.car.position.x, 0, this.car.position.z);
         }
         if (this.ground) {
             this.ground.position.set(this.car.position.x, -0.1, this.car.position.z);
@@ -1536,7 +1552,7 @@ class GameRenderer {
         const intX = this.intersectionGroup.position.x;
         const intZ = this.intersectionGroup.position.z;
         const intRot = this.intersectionGroup.rotation.y;
-        const exitDist = 60; // How far down new road to generate scenery
+        const exitDist = 40; // Match turn() exitDist so scenery aligns with car position
         
         // Generate for each direction
         ['left', 'right', 'straight'].forEach(direction => {
@@ -1576,14 +1592,15 @@ class GameRenderer {
         const roadSide = this.ROAD_WIDTH / 2 + 8;
         const treeStyle = config.treeStyle;
         
-        // Generate trees along the road direction - FAR from road
-        for (let dist = 30; dist < 110; dist += 18) {
+        // Trees along both sides - CLOSE to road like the first scene (~12-20 from road edge)
+        // Start at 30 to clear the intersection area
+        for (let dist = 30; dist < 100; dist += 12) {
             const baseX = carX - Math.sin(carRot) * dist;
             const baseZ = carZ - Math.cos(carRot) * dist;
             
             // Left side tree
             const leftTree = this.createTree(treeStyle);
-            const leftOffset = roadSide + 18 + Math.random() * 12;
+            const leftOffset = roadSide + 12 + Math.random() * 8;
             leftTree.position.set(
                 baseX - Math.cos(carRot) * leftOffset,
                 0,
@@ -1593,7 +1610,7 @@ class GameRenderer {
             
             // Right side tree
             const rightTree = this.createTree(treeStyle);
-            const rightOffset = roadSide + 18 + Math.random() * 12;
+            const rightOffset = roadSide + 12 + Math.random() * 8;
             rightTree.position.set(
                 baseX + Math.cos(carRot) * rightOffset,
                 0,
@@ -1602,42 +1619,78 @@ class GameRenderer {
             objects.push(rightTree);
         }
         
-        // Add fences along both sides of road
-        const fenceGroup = this.createFenceForDirection(carX, carZ, carRot, roadSide + 5, config.fenceType);
+        // Fences along both sides - CLOSE to road (~6 from road edge, matching first scene)
+        const fenceGroup = this.createFenceForDirection(carX, carZ, carRot, roadSide, config.fenceType);
         if (fenceGroup) objects.push(fenceGroup);
         
-        // Add a barn - CLOSER to road for better visibility
+        // Barn on configured side - close to road for visibility (~28 from center)
         if (config.barnSide !== 'none') {
             const barn = this.createBarn();
             const barnSide = config.barnSide === 'left' ? -1 : 1;
-            const barnDist = 50;
+            const barnDist = 35 + Math.random() * 15;
             barn.position.set(
-                carX - Math.sin(carRot) * barnDist + Math.cos(carRot) * barnSide * 35,
+                carX - Math.sin(carRot) * barnDist + Math.cos(carRot) * barnSide * 28,
                 0,
-                carZ - Math.cos(carRot) * barnDist - Math.sin(carRot) * barnSide * 35
+                carZ - Math.cos(carRot) * barnDist - Math.sin(carRot) * barnSide * 28
             );
-            // Rotate barn to face the road
             barn.rotation.y = carRot;
             objects.push(barn);
         }
         
-        // Add lake if configured
-        if (config.lakeSide !== 'none') {
-            const lake = this.createLakeForDirection(carX, carZ, carRot, config.lakeSide);
-            if (lake) objects.push(lake);
+        // 2 houses on random sides, close to road
+        for (let h = 0; h < 2; h++) {
+            const hSide = (h === 0) ? (config.barnSide === 'left' ? 1 : -1) : (Math.random() > 0.5 ? 1 : -1);
+            const house = this.createHouse();
+            const houseDist = 40 + h * 25 + Math.random() * 10;
+            house.position.set(
+                carX - Math.sin(carRot) * houseDist + Math.cos(carRot) * hSide * (28 + Math.random() * 6),
+                0,
+                carZ - Math.cos(carRot) * houseDist - Math.sin(carRot) * hSide * (28 + Math.random() * 6)
+            );
+            house.rotation.y = carRot;
+            objects.push(house);
         }
         
-        // Add bushes far from road
+        // Billboard along the road (branding per specs)
+        const billboard = this.createBillboard();
+        const bbSide = Math.random() > 0.5 ? -1 : 1;
+        const bbDist = 55 + Math.random() * 15;
+        billboard.position.set(
+            carX - Math.sin(carRot) * bbDist + Math.cos(carRot) * bbSide * (roadSide + 8),
+            0,
+            carZ - Math.cos(carRot) * bbDist - Math.sin(carRot) * bbSide * (roadSide + 8)
+        );
+        billboard.rotation.y = carRot;
+        objects.push(billboard);
+        
+        // Lake — always included, closer to road
+        const lake = this.createLakeForDirection(carX, carZ, carRot, config.lakeSide);
+        if (lake) objects.push(lake);
+        
+        // Bushes close to road (matching first scene ~15-30 from road center)
         for (let i = 0; i < config.bushCount; i++) {
             const bush = this.createBush();
             const side = Math.random() > 0.5 ? -1 : 1;
-            const dist = 40 + Math.random() * 50;
+            const dist = 10 + Math.random() * 65;
             bush.position.set(
-                carX - Math.sin(carRot) * dist + Math.cos(carRot) * side * (35 + Math.random() * 20),
+                carX - Math.sin(carRot) * dist + Math.cos(carRot) * side * (15 + Math.random() * 20),
                 0,
-                carZ - Math.cos(carRot) * dist - Math.sin(carRot) * side * (35 + Math.random() * 20)
+                carZ - Math.cos(carRot) * dist - Math.sin(carRot) * side * (15 + Math.random() * 20)
             );
             objects.push(bush);
+        }
+        
+        // Rocks scattered close, matching first scene
+        for (let i = 0; i < config.rockCount; i++) {
+            const rock = this.createRock();
+            const side = Math.random() > 0.5 ? -1 : 1;
+            const dist = 10 + Math.random() * 60;
+            rock.position.set(
+                carX - Math.sin(carRot) * dist + Math.cos(carRot) * side * (15 + Math.random() * 25),
+                0,
+                carZ - Math.cos(carRot) * dist - Math.sin(carRot) * side * (15 + Math.random() * 25)
+            );
+            objects.push(rock);
         }
         
         return objects;
@@ -1661,8 +1714,8 @@ class GameRenderer {
             const spacing = fenceType === 'long' ? 15 : 10;
             const fenceWidth = fenceType === 'long' ? 15 : 10;
             
-            // Place fences on both sides along the road - START AFTER INTERSECTION GAP
-            for (let dist = 45; dist < 100; dist += spacing) {
+            // Place fences on both sides along the road — start past intersection area
+            for (let dist = 40; dist < 120; dist += spacing) {
                 const baseX = carX - Math.sin(carRot) * dist;
                 const baseZ = carZ - Math.cos(carRot) * dist;
                 
@@ -1695,28 +1748,31 @@ class GameRenderer {
     
     // Create lake for a specific road direction
     createLakeForDirection(carX, carZ, carRot, lakeSide) {
-        if (!this.textures.lake) return null;
+        // Randomly pick between two lake variants
+        const lakeTex = Math.random() > 0.5 ? this.textures.lake1 : this.textures.lake2;
+        if (!lakeTex) return null;
         
         const lakeGroup = new THREE.Group();
         const material = new THREE.MeshBasicMaterial({
-            map: this.textures.lake,
+            map: lakeTex,
             transparent: true,
-            alphaTest: 0.1,
-            side: THREE.DoubleSide
+            alphaTest: 0.05,
+            side: THREE.DoubleSide,
+            depthWrite: false
         });
         
         const lakeSize = 25 + Math.random() * 10;
-        const planeGeo = new THREE.PlaneGeometry(lakeSize, lakeSize * 0.7);
+        const planeGeo = new THREE.PlaneGeometry(lakeSize, lakeSize * 0.65);
         const lake = new THREE.Mesh(planeGeo, material);
         lake.rotation.x = -Math.PI / 2; // Lay flat
         
-        // Position lake to side of road ahead - CLOSER for better visibility
+        // Position lake closer to road (matching first scene ~20 from center)
         const sideMultiplier = lakeSide === 'left' ? -1 : 1;
-        const distAhead = 40 + Math.random() * 20;
+        const distAhead = 35 + Math.random() * 15;
         lake.position.set(
-            carX - Math.sin(carRot) * distAhead + Math.cos(carRot) * sideMultiplier * 30,
-            0.15,
-            carZ - Math.cos(carRot) * distAhead - Math.sin(carRot) * sideMultiplier * 30
+            carX - Math.sin(carRot) * distAhead + Math.cos(carRot) * sideMultiplier * 20,
+            0.12,
+            carZ - Math.cos(carRot) * distAhead - Math.sin(carRot) * sideMultiplier * 20
         );
         
         lakeGroup.add(lake);
@@ -1746,7 +1802,18 @@ class GameRenderer {
     
     animate() {
         requestAnimationFrame(() => this.animate());
-        const delta = this.clock.getDelta();
+        
+        // Skip updates when paused
+        if (this.paused) {
+            // Still render once so the scene stays visible
+            if (this.renderer && this.scene && this.camera) {
+                this.renderer.render(this.scene, this.camera);
+            }
+            return;
+        }
+        
+        // Clamp delta to prevent time jumps (e.g. after tab switch)
+        const delta = Math.min(this.clock.getDelta(), 0.1);
         this.update(delta);
         this.renderer.render(this.scene, this.camera);
     }
@@ -1827,24 +1894,27 @@ class GameRenderer {
         }
         
         if (this.state === 'ARRIVING') {
-            // Smooth approach to destination
-            const targetSpeed = Math.max(2, this.carSpeed * 0.97);
+            // Drive steadily toward the parking area — car should pass the billboard first
+            const targetSpeed = Math.max(5, this.carSpeed * 0.99);
             this.carSpeed = targetSpeed;
             
             this.car.position.x -= Math.sin(this.car.rotation.y) * this.carSpeed * delta;
             this.car.position.z -= Math.cos(this.car.rotation.y) * this.carSpeed * delta;
             
-            // Check if we should start parking
+            // Start parking only when very close to spot (car has already passed billboard)
             if (this.parkingSpot) {
                 const dx = this.car.position.x - this.parkingSpot.x;
                 const dz = this.car.position.z - this.parkingSpot.z;
                 const distToParking = Math.sqrt(dx * dx + dz * dz);
                 
-                if (distToParking < 30) {
+                if (distToParking < 15) {
                     this.setState('PARKING');
                     this.parkingProgress = 0;
                     this.parkingStartPos = { x: this.car.position.x, z: this.car.position.z };
                     this.parkingStartRot = this.car.rotation.y;
+                    // Target rotation: aligned with the lane direction (same as car forward)
+                    this.parkingTargetRot = this.car.rotation.y;
+                    this.parkingWaitStarted = false;
                 }
             } else if (this.carSpeed < 0.5) {
                 this.carSpeed = 0;
@@ -1853,27 +1923,94 @@ class GameRenderer {
         }
         
         if (this.state === 'PARKING') {
-            // Smooth parking animation - pull off road to the right
-            this.parkingProgress += delta * 0.4;
+            // Smooth pull-in parking: decelerate → glide into spot → stop exactly between lanes
+            this.parkingProgress += delta * 0.45; // ~2.2 seconds total
             
             if (this.parkingProgress >= 1) {
                 this.parkingProgress = 1;
                 this.carSpeed = 0;
                 this.car.position.y = 0;
-                if (this.onArrivalComplete) this.onArrivalComplete();
+                // Place car exactly at the parking spot center, aligned with lanes
+                this.car.position.x = this.parkingSpot.x;
+                this.car.position.z = this.parkingSpot.z;
+                this.car.rotation.y = this.parkingTargetRot;
+                
+                // Wait 1.5 seconds with car parked before triggering results
+                if (!this.parkingWaitStarted) {
+                    this.parkingWaitStarted = true;
+                    setTimeout(() => {
+                        if (this.onArrivalComplete) this.onArrivalComplete();
+                    }, 1500);
+                }
             } else {
-                const t = this.easeInOutQuad(this.parkingProgress);
+                const t = this.parkingProgress;
                 
-                // Move car to parking spot
-                this.car.position.x = this.parkingStartPos.x + (this.parkingSpot.x - this.parkingStartPos.x) * t;
-                this.car.position.z = this.parkingStartPos.z + (this.parkingSpot.z - this.parkingStartPos.z) * t;
+                const dx = this.parkingSpot.x - this.parkingStartPos.x;
+                const dz = this.parkingSpot.z - this.parkingStartPos.z;
                 
-                // Slight turn into parking spot
-                const turnAmount = Math.PI / 8; // Small turn
-                this.car.rotation.y = this.parkingStartRot + turnAmount * t;
+                // Ease-out deceleration curve (fast at start, slow at end)
+                const easeOut = 1 - Math.pow(1 - t, 3);
                 
-                // Gentle bounce during movement
-                this.car.position.y = Math.sin(this.parkingProgress * Math.PI * 2) * 0.02 * (1 - t);
+                // Smoothly interpolate position from start to parking spot
+                this.car.position.x = this.parkingStartPos.x + dx * easeOut;
+                this.car.position.z = this.parkingStartPos.z + dz * easeOut;
+                
+                // Gentle rotation: start from current heading, end aligned with parking lanes
+                const rotDiff = this.parkingTargetRot - this.parkingStartRot;
+                // Normalize rotation difference
+                let normRot = rotDiff;
+                while (normRot > Math.PI) normRot -= Math.PI * 2;
+                while (normRot < -Math.PI) normRot += Math.PI * 2;
+                this.car.rotation.y = this.parkingStartRot + normRot * this.easeInOutQuad(t);
+                
+                // Subtle deceleration bounce (disappears as car stops)
+                this.car.position.y = Math.sin(t * Math.PI * 2) * 0.01 * (1 - t);
+            }
+        }
+        
+        if (this.state === 'BUMPING') {
+            // Car drives forward into the pothole (12 units ahead), then jolts
+            this.bumpProgress += delta * 1.8; // ~0.55 seconds — slightly slower so pothole is visible
+            
+            if (this.bumpProgress >= 1) {
+                // Bump done — reset car height and proceed
+                this.bumpProgress = 0;
+                this.isBumping = false;
+                this.car.position.y = 0;
+                this.setState('STOPPED');
+                // Clean up pothole after a short delay
+                setTimeout(() => this.cleanupPotholes(), 600);
+                if (this.bumpCallback) {
+                    this.bumpCallback();
+                    this.bumpCallback = null;
+                }
+            } else {
+                // Move car forward into the pothole
+                const fwdSpeed = 8;
+                this.car.position.x -= Math.sin(this.car.rotation.y) * fwdSpeed * delta;
+                this.car.position.z -= Math.cos(this.car.rotation.y) * fwdSpeed * delta;
+                
+                // Jarring bump: sharp drop then bounce up then settle
+                const t = this.bumpProgress;
+                if (t < 0.25) {
+                    // Drop into pothole
+                    this.car.position.y = -0.5 * (t / 0.25);
+                } else if (t < 0.5) {
+                    // Bounce up sharply
+                    const bt = (t - 0.25) / 0.25;
+                    this.car.position.y = -0.5 + 0.9 * bt;
+                } else if (t < 0.75) {
+                    // Small dip
+                    const bt = (t - 0.5) / 0.25;
+                    this.car.position.y = 0.4 - 0.25 * bt;
+                } else {
+                    // Settle back to 0
+                    const bt = (t - 0.75) / 0.25;
+                    this.car.position.y = 0.15 * (1 - bt);
+                }
+                
+                // Slight random tilt for realism
+                this.car.rotation.z = Math.sin(t * Math.PI * 4) * 0.04 * (1 - t);
             }
         }
         
@@ -1889,13 +2026,9 @@ class GameRenderer {
             this.sky.position.z = this.car.position.z;
         }
         
-        // Update hills relative to car - keep on distant horizon ahead
+        // Update hills: 360° panorama ring centered on car, no rotation
         if (this.hillGroup) {
-            // Hills follow car but stay far ahead on distant horizon
-            const hillOffsetX = this.car.position.x - Math.sin(this.car.rotation.y) * 170;
-            const hillOffsetZ = this.car.position.z - Math.cos(this.car.rotation.y) * 170;
-            this.hillGroup.position.x = hillOffsetX;
-            this.hillGroup.position.z = hillOffsetZ;
+            this.hillGroup.position.set(this.car.position.x, 0, this.car.position.z);
         }
         
         this.updateCamera();
@@ -1911,6 +2044,125 @@ class GameRenderer {
     
     setState(newState) {
         this.state = newState;
+    }
+    
+    // === PAUSE/RESUME ===
+    
+    pauseForVisibility() {
+        if (!this.paused) {
+            this.paused = true;
+            this.clock.stop();
+        }
+    }
+    
+    resumeFromVisibility() {
+        // Only auto-resume if not manually paused by the user
+        if (this.paused && !this.manuallyPaused) {
+            this.paused = false;
+            this.clock.start();
+        }
+    }
+    
+    togglePause() {
+        if (this.paused) {
+            this.paused = false;
+            this.manuallyPaused = false;
+            this.clock.start();
+        } else {
+            this.paused = true;
+            this.manuallyPaused = true;
+            this.clock.stop();
+        }
+        return this.paused;
+    }
+    
+    isPaused() {
+        return this.paused;
+    }
+    
+    // === POTHOLE & BUMP SYSTEM ===
+    
+    createPothole() {
+        // Place a large, highly visible pothole on the road ahead of the car
+        const potholeGroup = new THREE.Group();
+        const carRot = this.car.rotation.y;
+        
+        // Position 12 units ahead so the player can see it before hitting
+        const pX = this.car.position.x - Math.sin(carRot) * 12;
+        const pZ = this.car.position.z - Math.cos(carRot) * 12;
+        
+        // Outer cracked edge (light brown dirt ring — contrasts with dark road)
+        const outerRingGeo = new THREE.RingGeometry(2.6, 3.5, 20);
+        const outerRingMat = new THREE.MeshBasicMaterial({ 
+            color: 0x8B7355,
+            side: THREE.DoubleSide
+        });
+        const outerRing = new THREE.Mesh(outerRingGeo, outerRingMat);
+        outerRing.rotation.x = -Math.PI / 2;
+        outerRing.position.set(pX, 0.07, pZ);
+        potholeGroup.add(outerRing);
+        
+        // Dark crater circle (broken asphalt)
+        const craterGeo = new THREE.CircleGeometry(2.8, 20);
+        const craterMat = new THREE.MeshBasicMaterial({ color: 0x222222 });
+        const crater = new THREE.Mesh(craterGeo, craterMat);
+        crater.rotation.x = -Math.PI / 2;
+        crater.position.set(pX, 0.08, pZ);
+        potholeGroup.add(crater);
+        
+        // Inner deep hole (very dark)
+        const innerGeo = new THREE.CircleGeometry(1.8, 16);
+        const innerMat = new THREE.MeshBasicMaterial({ color: 0x050505 });
+        const inner = new THREE.Mesh(innerGeo, innerMat);
+        inner.rotation.x = -Math.PI / 2;
+        inner.position.set(pX, 0.09, pZ);
+        potholeGroup.add(inner);
+        
+        // Reddish-brown inner ring for depth glow effect
+        const depthRingGeo = new THREE.RingGeometry(1.6, 2.5, 16);
+        const depthRingMat = new THREE.MeshBasicMaterial({ 
+            color: 0x5C3A1E,
+            side: THREE.DoubleSide
+        });
+        const depthRing = new THREE.Mesh(depthRingGeo, depthRingMat);
+        depthRing.rotation.x = -Math.PI / 2;
+        depthRing.position.set(pX, 0.085, pZ);
+        potholeGroup.add(depthRing);
+        
+        // Small debris chunks around the edge for realism
+        for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2 + Math.random() * 0.5;
+            const dist = 3.0 + Math.random() * 0.8;
+            const chunkGeo = new THREE.CircleGeometry(0.25 + Math.random() * 0.2, 6);
+            const chunkMat = new THREE.MeshBasicMaterial({ color: 0x666655 });
+            const chunk = new THREE.Mesh(chunkGeo, chunkMat);
+            chunk.rotation.x = -Math.PI / 2;
+            chunk.position.set(
+                pX + Math.cos(angle) * dist,
+                0.075,
+                pZ + Math.sin(angle) * dist
+            );
+            potholeGroup.add(chunk);
+        }
+        
+        this.scene.add(potholeGroup);
+        this.potholeObjects.push(potholeGroup);
+        
+        return potholeGroup;
+    }
+    
+    triggerBump(callback) {
+        // Show pothole, then animate car hitting it with a jarring bump
+        this.createPothole();
+        this.isBumping = true;
+        this.bumpProgress = 0;
+        this.bumpCallback = callback;
+        this.setState('BUMPING');
+    }
+    
+    cleanupPotholes() {
+        this.potholeObjects.forEach(obj => this.scene.remove(obj));
+        this.potholeObjects = [];
     }
     
     // === PUBLIC API ===
@@ -1970,6 +2222,7 @@ class GameRenderer {
     turn(direction) {
         this.turnDirection = direction;
         this.turnProgress = 0;
+        this.car.rotation.z = 0; // Reset any bump tilt
         this.turnStartPos = { x: this.car.position.x, z: this.car.position.z };
         this.turnStartRot = this.car.rotation.y;
         
@@ -1986,10 +2239,10 @@ class GameRenderer {
         
         if (direction === 'left') {
             this.turnEndRot = intRot + Math.PI / 2;
-            // Control point is at intersection center, offset toward the turn
+            // Control point at intersection center for clean 90-degree curve that stays on road
             this.turnControlPoint = {
-                x: intX - Math.cos(intRot) * turnRadius * 0.3,
-                z: intZ + Math.sin(intRot) * turnRadius * 0.3 - Math.cos(intRot) * turnRadius * 0.3
+                x: intX,
+                z: intZ
             };
             this.turnEndPos = {
                 x: intX - Math.cos(intRot) * exitDist,
@@ -1997,9 +2250,10 @@ class GameRenderer {
             };
         } else if (direction === 'right') {
             this.turnEndRot = intRot - Math.PI / 2;
+            // Control point at intersection center for clean 90-degree curve that stays on road
             this.turnControlPoint = {
-                x: intX + Math.cos(intRot) * turnRadius * 0.3,
-                z: intZ - Math.sin(intRot) * turnRadius * 0.3 - Math.cos(intRot) * turnRadius * 0.3
+                x: intX,
+                z: intZ
             };
             this.turnEndPos = {
                 x: intX + Math.cos(intRot) * exitDist,
@@ -2025,7 +2279,7 @@ class GameRenderer {
         this.intersectionGroup.visible = false;
         
         this.setState('POST_TURN_DRIVING');
-        this.targetCarSpeed = 14;
+        this.targetCarSpeed = 16;
         
         // Reset pregen flag for next intersection (need to pregenerate for new directions)
         this.pregenSceneryCreated = false;
@@ -2042,10 +2296,8 @@ class GameRenderer {
             this.ground.position.set(this.car.position.x, -0.1, this.car.position.z);
         }
         if (this.hillGroup) {
-            // Hills ahead on distant horizon using car's forward direction
-            const hillOffsetX = this.car.position.x - Math.sin(this.car.rotation.y) * 170;
-            const hillOffsetZ = this.car.position.z - Math.cos(this.car.rotation.y) * 170;
-            this.hillGroup.position.set(hillOffsetX, 0, hillOffsetZ);
+            // 360° panorama ring: center on car, NO rotation
+            this.hillGroup.position.set(this.car.position.x, 0, this.car.position.z);
         }
         
         // Scenery was already shown in turn() - no need to touch it here!
@@ -2055,128 +2307,6 @@ class GameRenderer {
         if (this.onTurnComplete) {
             this.onTurnComplete();
         }
-    }
-    
-    regenerateSceneryForNewRoad() {
-        // Clear old scenery
-        this.sceneryObjects.forEach(obj => this.scene.remove(obj));
-        this.sceneryObjects = [];
-        
-        const carX = this.car.position.x;
-        const carZ = this.car.position.z;
-        const carRot = this.car.rotation.y;
-        const roadSide = this.ROAD_WIDTH / 2 + 8; // Larger buffer
-        
-        // Generate new random config for this road
-        this.sceneryConfig = this.getRandomSceneryConfig();
-        const treeStyle = this.sceneryConfig.treeStyle;
-        
-        // Generate trees along the new road direction (ahead of car) - FAR from road
-        for (let dist = 25; dist < 100; dist += 15) {
-            // Position along the road (ahead)
-            const baseX = carX - Math.sin(carRot) * dist;
-            const baseZ = carZ - Math.cos(carRot) * dist;
-            
-            // Left side tree - far from road
-            const leftTree = this.createTree(treeStyle);
-            const leftOffset = roadSide + 18 + Math.random() * 12;
-            leftTree.position.set(
-                baseX - Math.cos(carRot) * leftOffset,
-                0,
-                baseZ + Math.sin(carRot) * leftOffset
-            );
-            this.scene.add(leftTree);
-            this.sceneryObjects.push(leftTree);
-            
-            // Right side tree - far from road
-            const rightTree = this.createTree(treeStyle);
-            const rightOffset = roadSide + 18 + Math.random() * 12;
-            rightTree.position.set(
-                baseX + Math.cos(carRot) * rightOffset,
-                0,
-                baseZ - Math.sin(carRot) * rightOffset
-            );
-            this.scene.add(rightTree);
-            this.sceneryObjects.push(rightTree);
-        }
-        
-        // Add fences along the road - further out
-        this.createFenceAlongRoad(carX, carZ, carRot, -roadSide - 8, 20, 90);
-        this.createFenceAlongRoad(carX, carZ, carRot, roadSide + 8, 20, 90);
-        
-        // Add a barn on one side - far from road
-        const barn = this.createBarn();
-        const barnSide = Math.random() > 0.5 ? 1 : -1;
-        const barnDist = 55 + Math.random() * 25;
-        barn.position.set(
-            carX - Math.sin(carRot) * barnDist + Math.cos(carRot) * barnSide * 60,
-            0,
-            carZ - Math.cos(carRot) * barnDist - Math.sin(carRot) * barnSide * 60
-        );
-        // Rotate barn to face the road (toward player's view direction)
-        barn.rotation.y = carRot;
-        this.scene.add(barn);
-        this.sceneryObjects.push(barn);
-        
-        // Add hay bales - far from road
-        for (let i = 0; i < 4; i++) {
-            const hay = this.createHayBale();
-            const side = i % 2 === 0 ? -1 : 1;
-            const dist = 40 + i * 15 + Math.random() * 10;
-            hay.position.set(
-                carX - Math.sin(carRot) * dist + Math.cos(carRot) * side * (40 + Math.random() * 20),
-                0,
-                carZ - Math.cos(carRot) * dist - Math.sin(carRot) * side * (40 + Math.random() * 20)
-            );
-            this.scene.add(hay);
-            this.sceneryObjects.push(hay);
-        }
-    }
-    
-    createFenceAlongRoad(carX, carZ, carRot, sideOffset, startDist, endDist) {
-        const fenceGroup = new THREE.Group();
-        const postMat = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
-        const railMat = new THREE.MeshLambertMaterial({ color: 0x654321 });
-        
-        const postSpacing = 8;
-        const posts = [];
-        
-        for (let dist = startDist; dist < endDist; dist += postSpacing) {
-            const px = carX - Math.sin(carRot) * dist + Math.cos(carRot) * sideOffset;
-            const pz = carZ - Math.cos(carRot) * dist - Math.sin(carRot) * sideOffset;
-            
-            const postGeo = new THREE.CylinderGeometry(0.1, 0.12, 1.5, 6);
-            const post = new THREE.Mesh(postGeo, postMat);
-            post.position.set(px, 0.75, pz);
-            post.castShadow = true;
-            fenceGroup.add(post);
-            posts.push({ x: px, z: pz });
-        }
-        
-        // Rails between posts
-        for (let i = 0; i < posts.length - 1; i++) {
-            const p1 = posts[i];
-            const p2 = posts[i + 1];
-            const dx = p2.x - p1.x;
-            const dz = p2.z - p1.z;
-            const length = Math.sqrt(dx * dx + dz * dz);
-            const angle = Math.atan2(dx, dz);
-            
-            const railGeo = new THREE.BoxGeometry(0.08, 0.08, length);
-            
-            const topRail = new THREE.Mesh(railGeo, railMat);
-            topRail.position.set((p1.x + p2.x) / 2, 1.3, (p1.z + p2.z) / 2);
-            topRail.rotation.y = angle;
-            fenceGroup.add(topRail);
-            
-            const bottomRail = new THREE.Mesh(railGeo, railMat);
-            bottomRail.position.set((p1.x + p2.x) / 2, 0.6, (p1.z + p2.z) / 2);
-            bottomRail.rotation.y = angle;
-            fenceGroup.add(bottomRail);
-        }
-        
-        this.scene.add(fenceGroup);
-        this.sceneryObjects.push(fenceGroup);
     }
     
     showNextIntersection() {
@@ -2200,28 +2330,43 @@ class GameRenderer {
         const carX = this.car.position.x;
         const carZ = this.car.position.z;
         const carRot = this.car.rotation.y;
+        const roadSide = this.ROAD_WIDTH / 2 + 8;
         
-        // Position for the barn (close to road, on the right side)
-        const barnDist = 70;
-        const barnSideOffset = 25; // Close to road
-        this.destinationBarn = this.createBarn();
-        this.destinationBarn.position.set(
-            carX - Math.sin(carRot) * barnDist + Math.cos(carRot) * barnSideOffset,
+        // === JOHNSON McGINNIS BILLBOARD SIGN — car passes this first ===
+        const signDist = 30;
+        const signSideOffset = 10;
+        const sign = this.createBillboard();
+        sign.position.set(
+            carX - Math.sin(carRot) * signDist + Math.cos(carRot) * signSideOffset,
             0,
-            carZ - Math.cos(carRot) * barnDist - Math.sin(carRot) * barnSideOffset
+            carZ - Math.cos(carRot) * signDist - Math.sin(carRot) * signSideOffset
         );
-        this.destinationBarn.rotation.y = carRot - Math.PI / 4; // Angled for visibility
-        this.scene.add(this.destinationBarn);
-        this.sceneryObjects.push(this.destinationBarn);
+        sign.rotation.y = carRot; // Face approaching car
+        this.scene.add(sign);
+        this.sceneryObjects.push(sign);
         
-        // Create parking spot next to barn
+        // === JOHNSON McGINNIS OFFICE (House) — behind the parking lot ===
+        const officeDist = 85;
+        const officeSideOffset = 22;
+        const office = this.createHouse();
+        office.position.set(
+            carX - Math.sin(carRot) * officeDist + Math.cos(carRot) * officeSideOffset,
+            0,
+            carZ - Math.cos(carRot) * officeDist - Math.sin(carRot) * officeSideOffset
+        );
+        office.rotation.y = carRot - Math.PI / 6;
+        this.scene.add(office);
+        this.sceneryObjects.push(office);
+        this.destinationBarn = office;
+        
+        // === PARKING SPOT — between billboard and office, car glides in here ===
         this.parkingSpot = {
-            x: carX - Math.sin(carRot) * 80 + Math.cos(carRot) * 18,
-            z: carZ - Math.cos(carRot) * 80 - Math.sin(carRot) * 18
+            x: carX - Math.sin(carRot) * 68 + Math.cos(carRot) * 3,
+            z: carZ - Math.cos(carRot) * 68 - Math.sin(carRot) * 3
         };
         
-        // Add parking lot surface (small gravel area)
-        const parkingGeo = new THREE.PlaneGeometry(20, 25);
+        // Parking lot surface (wider for clear visibility)
+        const parkingGeo = new THREE.PlaneGeometry(24, 30);
         const parkingMat = new THREE.MeshLambertMaterial({ color: 0x555555 });
         const parkingLot = new THREE.Mesh(parkingGeo, parkingMat);
         parkingLot.rotation.x = -Math.PI / 2;
@@ -2230,9 +2375,24 @@ class GameRenderer {
         this.scene.add(parkingLot);
         this.sceneryObjects.push(parkingLot);
         
-        // Add some trees around the final area
-        const roadSide = this.ROAD_WIDTH / 2 + 8;
-        for (let dist = 30; dist < 100; dist += 20) {
+        // Parking lot lines (white stripes) — 5 lanes
+        const stripeMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
+        for (let i = -2; i <= 2; i++) {
+            const stripeGeo = new THREE.PlaneGeometry(0.25, 6);
+            const stripe = new THREE.Mesh(stripeGeo, stripeMat);
+            stripe.rotation.x = -Math.PI / 2;
+            stripe.rotation.z = carRot;
+            stripe.position.set(
+                this.parkingSpot.x + Math.cos(carRot) * (i * 3.5),
+                0.04,
+                this.parkingSpot.z - Math.sin(carRot) * (i * 3.5)
+            );
+            this.scene.add(stripe);
+            this.sceneryObjects.push(stripe);
+        }
+        
+        // === TREES around the final area ===
+        for (let dist = 30; dist < 100; dist += 18) {
             const baseX = carX - Math.sin(carRot) * dist;
             const baseZ = carZ - Math.cos(carRot) * dist;
             
@@ -2247,36 +2407,70 @@ class GameRenderer {
             this.sceneryObjects.push(leftTree);
             
             // Right side trees (fewer, leave space for parking)
-            if (dist > 50) {
+            if (dist > 55) {
                 const rightTree = this.createTree('mixed');
                 rightTree.position.set(
-                    baseX + Math.cos(carRot) * (roadSide + 25),
+                    baseX + Math.cos(carRot) * (roadSide + 28),
                     0,
-                    baseZ - Math.sin(carRot) * (roadSide + 25)
+                    baseZ - Math.sin(carRot) * (roadSide + 28)
                 );
                 this.scene.add(rightTree);
                 this.sceneryObjects.push(rightTree);
             }
         }
         
-        // Add fences but leave gap for parking entry
+        // Add bushes around office
+        for (let i = 0; i < 5; i++) {
+            const bush = this.createBush();
+            const angle = (i / 5) * Math.PI * 0.6 + Math.PI * 0.2;
+            bush.position.set(
+                office.position.x + Math.cos(angle) * (12 + Math.random() * 5),
+                0,
+                office.position.z + Math.sin(angle) * (12 + Math.random() * 5)
+            );
+            this.scene.add(bush);
+            this.sceneryObjects.push(bush);
+        }
+        
+        // === FENCES with proper rails on left side ===
         const fenceGroup = new THREE.Group();
         const postMat = new THREE.MeshLambertMaterial({ color: 0x8B5A3C });
         const railMat = new THREE.MeshLambertMaterial({ color: 0x7A4A30 });
+        const fencePosts = [];
         
-        // Left side fence
         for (let dist = 20; dist < 90; dist += 5) {
             const baseX = carX - Math.sin(carRot) * dist;
             const baseZ = carZ - Math.cos(carRot) * dist;
             
             const postGeo = new THREE.BoxGeometry(0.3, 1.8, 0.3);
             const post = new THREE.Mesh(postGeo, postMat);
-            post.position.set(
-                baseX - Math.cos(carRot) * (roadSide + 6),
-                0.9,
-                baseZ + Math.sin(carRot) * (roadSide + 6)
-            );
+            const px = baseX - Math.cos(carRot) * (roadSide + 6);
+            const pz = baseZ + Math.sin(carRot) * (roadSide + 6);
+            post.position.set(px, 0.9, pz);
             fenceGroup.add(post);
+            fencePosts.push({ x: px, z: pz });
+        }
+        
+        // Add horizontal rails between posts (fixes missing rail bug)
+        for (let i = 0; i < fencePosts.length - 1; i++) {
+            const p1 = fencePosts[i];
+            const p2 = fencePosts[i + 1];
+            const dx = p2.x - p1.x;
+            const dz = p2.z - p1.z;
+            const length = Math.sqrt(dx * dx + dz * dz);
+            const angle = Math.atan2(dx, dz);
+            
+            const railGeo = new THREE.BoxGeometry(0.12, 0.1, length);
+            
+            const topRail = new THREE.Mesh(railGeo, railMat);
+            topRail.position.set((p1.x + p2.x) / 2, 1.5, (p1.z + p2.z) / 2);
+            topRail.rotation.y = angle;
+            fenceGroup.add(topRail);
+            
+            const bottomRail = new THREE.Mesh(railGeo, railMat);
+            bottomRail.position.set((p1.x + p2.x) / 2, 0.5, (p1.z + p2.z) / 2);
+            bottomRail.rotation.y = angle;
+            fenceGroup.add(bottomRail);
         }
         
         this.scene.add(fenceGroup);
@@ -2289,6 +2483,7 @@ class GameRenderer {
     reset() {
         this.car.position.set(0, 0, 70);
         this.car.rotation.y = 0;
+        this.car.rotation.z = 0;
         this.carSpeed = 0;
         this.targetCarSpeed = 0;
         this.state = 'IDLE';
@@ -2302,7 +2497,14 @@ class GameRenderer {
         this.parkingProgress = 0;
         this.parkingSpot = null;
         this.parkingStartPos = null;
+        this.parkingTargetRot = 0;
+        this.parkingWaitStarted = false;
         this.destinationBarn = null;
+        
+        // Clean up potholes
+        this.cleanupPotholes();
+        this.isBumping = false;
+        this.bumpProgress = 0;
         
         this.positionIntersectionAhead();
         this.updateCamera(true);
