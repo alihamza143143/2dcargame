@@ -1,7 +1,7 @@
 /**
  * 3D Game Renderer - Tennessee Driving Experience
  * Features: Connected roads, proper stop signs, rich scenery (trees, fences, barns, fields)
- * Yellow direction poles at intersections
+ * Realistic street lights at intersections
  */
 
 class GameRenderer {
@@ -75,6 +75,19 @@ class GameRenderer {
         this.bumpCallback = null;
         this.potholeObjects = [];
         
+        // Fallen tree state (tree consequence)
+        this.fallenTreeObjects = [];
+        this.treeHitProgress = 0;
+        this.treeHitCallback = null;
+        
+        // Swerve/debris state (bump consequence)
+        this.roadDebrisObjects = [];
+        this.swerveProgress = 0;
+        this.swerveCallback = null;
+        
+        // Direction signs at intersection
+        this.directionSignObjects = [];
+        
         // Pause state
         this.paused = false;
         this.manuallyPaused = false;
@@ -87,13 +100,13 @@ class GameRenderer {
     
     // Generate random scenery configuration
     getRandomSceneryConfig() {
-        const lakeOptions = ['left', 'right', 'left', 'right']; // Always include a lake
+        const lakeSide = Math.random() > 0.5 ? 'left' : 'right'; // Always show a lake
         const barnSide = Math.random() > 0.5 ? 'left' : 'right';
         const treeStyle = 'green'; // Only assets2 trees
         const fenceType = Math.random() > 0.5 ? 'long' : 'short';
         
         return {
-            lakeSide: lakeOptions[Math.floor(Math.random() * lakeOptions.length)],
+            lakeSide: lakeSide,
             barnSide: barnSide,
             treeStyle: treeStyle, // Only assets2 trees
             fenceType: fenceType,
@@ -115,8 +128,8 @@ class GameRenderer {
             tree1: 'assets2/Tree 1.png',
             tree2: 'assets2/Tree 2.png',
             tree3: 'assets2/Tree 3.png',
-            // Barn from assets (not in assets2)
-            barn: 'assets/barn.png',
+            // Barn from assets2
+            barn: 'assets2/barn.png',
             // Fences from assets2
             fenceLong: 'assets2/Fence - Long.png',
             fenceShort: 'assets2/Fence.png',
@@ -127,10 +140,10 @@ class GameRenderer {
             bushSmall: 'assets2/bush-small.png',
             bushMedium: 'assets2/bush-medium.png',
             bushLarge: 'assets2/bush-large.png',
-            // Rocks from assets (not in assets2)
-            rockSmall: 'assets/rock-small.png',
-            rockMedium: 'assets/rock-medium.png',
-            rockLarge: 'assets/rock-large.png',
+            // Rocks from assets2
+            rockSmall: 'assets2/rock-small.png',
+            rockMedium: 'assets2/rock-medium.png',
+            rockLarge: 'assets2/rock-large.png',
             // Car from assets2
             car: 'assets2/Car.png',
             // Stop sign from assets2
@@ -335,7 +348,7 @@ class GameRenderer {
         });
         this.ground = new THREE.Mesh(groundGeo, groundMat);
         this.ground.rotation.x = -Math.PI / 2;
-        this.ground.position.y = -0.1;
+        this.ground.position.y = -1.1;
         this.ground.receiveShadow = true;
         this.scene.add(this.ground);
     }
@@ -671,10 +684,10 @@ class GameRenderer {
         // === ADD SCENERY TO INTERSECTION ROADS ===
         this.addIntersectionScenery(junctionEdge, sideRoadLength);
         
-        // === YELLOW DIRECTION POLES ===
-        this.createDirectionPole(-8, -12, 'LEFT', 'left');
-        this.createDirectionPole(0, -15, 'STRAIGHT', 'straight');
-        this.createDirectionPole(8, -12, 'RIGHT', 'right');
+        // === STREET LIGHTS (no center pole) ===
+        const shoulderOffset = this.ROAD_WIDTH / 2 + 3;
+        this.createStreetLight(-shoulderOffset, -10, Math.PI / 2);
+        this.createStreetLight(shoulderOffset, -10, -Math.PI / 2);
         
         // === STOP SIGN ===
         this.createStopSign(this.ROAD_WIDTH / 2 + 2, 18);
@@ -698,11 +711,11 @@ class GameRenderer {
         // Trees along left road - far from road, START FAR from junction
         for (let x = -junctionEdge - 50; x > -140; x -= 18) {
             const tree1 = this.createTree();
-            tree1.position.set(x, 0, -roadSide - 15 - Math.random() * 10);
+            tree1.position.set(x, 0, -roadSide - 10 - Math.random() * 8);
             this.intersectionGroup.add(tree1);
             
             const tree2 = this.createTree();
-            tree2.position.set(x - 5, 0, roadSide + 15 + Math.random() * 10);
+            tree2.position.set(x - 5, 0, roadSide + 10 + Math.random() * 8);
             this.intersectionGroup.add(tree2);
         }
         // Fences along left road - start well after the junction cross-road opening
@@ -713,11 +726,11 @@ class GameRenderer {
         // Trees along right road - far from road, START FAR from junction
         for (let x = junctionEdge + 50; x < 140; x += 18) {
             const tree1 = this.createTree();
-            tree1.position.set(x, 0, -roadSide - 15 - Math.random() * 10);
+            tree1.position.set(x, 0, -roadSide - 10 - Math.random() * 8);
             this.intersectionGroup.add(tree1);
             
             const tree2 = this.createTree();
-            tree2.position.set(x + 5, 0, roadSide + 15 + Math.random() * 10);
+            tree2.position.set(x + 5, 0, roadSide + 10 + Math.random() * 8);
             this.intersectionGroup.add(tree2);
         }
         // Fences along right road - start well after the junction cross-road opening
@@ -728,11 +741,11 @@ class GameRenderer {
         // Trees along straight road - far from road, START FAR from junction
         for (let z = -junctionEdge - 50; z > -140; z -= 18) {
             const tree1 = this.createTree();
-            tree1.position.set(-roadSide - 15 - Math.random() * 10, 0, z);
+            tree1.position.set(-roadSide - 10 - Math.random() * 8, 0, z);
             this.intersectionGroup.add(tree1);
             
             const tree2 = this.createTree();
-            tree2.position.set(roadSide + 15 + Math.random() * 10, 0, z - 5);
+            tree2.position.set(roadSide + 10 + Math.random() * 8, 0, z - 5);
             this.intersectionGroup.add(tree2);
         }
         // Fences along straight road - start well after the junction cross-road opening
@@ -816,56 +829,48 @@ class GameRenderer {
         }
     }
     
-    createDirectionPole(x, z, label, direction) {
-        const poleGroup = new THREE.Group();
-        
-        // Yellow pole
-        const poleGeo = new THREE.CylinderGeometry(0.15, 0.15, 4, 8);
-        const poleMat = new THREE.MeshLambertMaterial({ color: 0xFFCC00 });
+    createStreetLight(x, z, rotationY = 0) {
+        const lightGroup = new THREE.Group();
+
+        // Base
+        const baseGeo = new THREE.CylinderGeometry(0.28, 0.34, 0.35, 10);
+        const baseMat = new THREE.MeshLambertMaterial({ color: 0x4A4A4A });
+        const base = new THREE.Mesh(baseGeo, baseMat);
+        base.position.y = 0.175;
+        lightGroup.add(base);
+
+        // Main pole
+        const poleGeo = new THREE.CylinderGeometry(0.09, 0.12, 6.2, 10);
+        const poleMat = new THREE.MeshLambertMaterial({ color: 0x7A7A7A });
         const pole = new THREE.Mesh(poleGeo, poleMat);
-        pole.position.y = 2;
+        pole.position.y = 3.45;
         pole.castShadow = true;
-        poleGroup.add(pole);
-        
-        // Yellow arrow sign on top
-        const signGroup = new THREE.Group();
-        
-        // Arrow body
-        const arrowBodyGeo = new THREE.BoxGeometry(1.5, 0.6, 0.15);
-        const arrowMat = new THREE.MeshLambertMaterial({ color: 0xFFCC00 });
-        const arrowBody = new THREE.Mesh(arrowBodyGeo, arrowMat);
-        signGroup.add(arrowBody);
-        
-        // Arrow head (triangle)
-        const headShape = new THREE.Shape();
-        headShape.moveTo(0, 0.6);
-        headShape.lineTo(-0.4, 0);
-        headShape.lineTo(0.4, 0);
-        headShape.closePath();
-        
-        const headGeo = new THREE.ExtrudeGeometry(headShape, { depth: 0.15, bevelEnabled: false });
-        const arrowHead = new THREE.Mesh(headGeo, arrowMat);
-        arrowHead.position.z = -0.075;
-        
-        if (direction === 'left') {
-            arrowHead.rotation.z = Math.PI / 2;
-            arrowHead.position.x = -1;
-            arrowHead.position.y = -0.3;
-        } else if (direction === 'right') {
-            arrowHead.rotation.z = -Math.PI / 2;
-            arrowHead.position.x = 1;
-            arrowHead.position.y = 0.3;
-        } else { // straight
-            arrowHead.position.y = 0.45;
-        }
-        signGroup.add(arrowHead);
-        
-        signGroup.position.y = 4.5;
-        signGroup.rotation.y = Math.PI; // Face the car
-        poleGroup.add(signGroup);
-        
-        poleGroup.position.set(x, 0, z);
-        this.intersectionGroup.add(poleGroup);
+        lightGroup.add(pole);
+
+        // Curved arm
+        const armGeo = new THREE.CylinderGeometry(0.05, 0.05, 1.8, 8);
+        const arm = new THREE.Mesh(armGeo, poleMat);
+        arm.position.set(0.7, 6.35, 0);
+        arm.rotation.z = -Math.PI / 2.7;
+        lightGroup.add(arm);
+
+        // Lamp head
+        const headGeo = new THREE.BoxGeometry(0.45, 0.22, 0.32);
+        const headMat = new THREE.MeshLambertMaterial({ color: 0x2F2F2F });
+        const head = new THREE.Mesh(headGeo, headMat);
+        head.position.set(1.25, 6.05, 0);
+        lightGroup.add(head);
+
+        // Bulb glow (subtle)
+        const bulbGeo = new THREE.SphereGeometry(0.08, 8, 8);
+        const bulbMat = new THREE.MeshBasicMaterial({ color: 0xFFF2B0 });
+        const bulb = new THREE.Mesh(bulbGeo, bulbMat);
+        bulb.position.set(1.25, 5.92, 0);
+        lightGroup.add(bulb);
+
+        lightGroup.position.set(x, 0, z);
+        lightGroup.rotation.y = rotationY;
+        this.intersectionGroup.add(lightGroup);
     }
     
     createStopSign(x, z) {
@@ -1009,24 +1014,24 @@ class GameRenderer {
         for (let z = carZ - 10; z > carZ - 70; z -= 20) {
             // Left side trees - far from road
             const leftTree = this.createTree(treeStyle);
-            leftTree.position.set(carX - roadSide - 20 - Math.random() * 8, 0, z + Math.random() * 3);
+            leftTree.position.set(carX - roadSide - 14 - Math.random() * 6, 0, z + Math.random() * 3);
             this.scene.add(leftTree);
             this.sceneryObjects.push(leftTree);
             
             // Right side trees - far from road
             const rightTree = this.createTree(treeStyle);
-            rightTree.position.set(carX + roadSide + 20 + Math.random() * 8, 0, z + Math.random() * 3);
+            rightTree.position.set(carX + roadSide + 14 + Math.random() * 6, 0, z + Math.random() * 3);
             this.scene.add(rightTree);
             this.sceneryObjects.push(rightTree);
         }
         
         // Fences along both sides - STOP before intersection so cross-road openings are clear
-        this.createFence(carX - roadSide - 8, carZ - 25, carZ - 55, 'left', fenceType);
-        this.createFence(carX + roadSide + 8, carZ - 25, carZ - 55, 'right', fenceType);
+        this.createFence(carX - roadSide - 6, carZ - 25, carZ - 55, 'left', fenceType);
+        this.createFence(carX + roadSide + 6, carZ - 25, carZ - 55, 'right', fenceType);
         
         // Single barn on configured side - CLOSER to road for visibility
         const barn = this.createBarn();
-        const barnX = barnSide === 'left' ? carX - 35 : carX + 35;
+        const barnX = barnSide === 'left' ? carX - 31 : carX + 31;
         barn.position.set(barnX, 0, carZ - 40);
         barn.rotation.y = this.car ? this.car.rotation.y : 0; // Face toward camera
         this.scene.add(barn);
@@ -1034,7 +1039,7 @@ class GameRenderer {
         
         // House on opposite side of barn for Tennessee residential feel
         const house = this.createHouse();
-        const houseX = barnSide === 'left' ? carX + 40 : carX - 40;
+        const houseX = barnSide === 'left' ? carX + 34 : carX - 34;
         house.position.set(houseX, 0, carZ - 55);
         house.rotation.y = this.car ? this.car.rotation.y : 0;
         this.scene.add(house);
@@ -1043,17 +1048,25 @@ class GameRenderer {
         // Billboard along the road (branding per specs)
         const billboard = this.createBillboard();
         const bbSide = Math.random() > 0.5 ? -1 : 1;
-        billboard.position.set(carX + bbSide * (roadSide + 15), 0, carZ - 60);
+        billboard.position.set(carX + bbSide * (roadSide + 11), 0, carZ - 60);
         billboard.rotation.y = this.car ? this.car.rotation.y : 0;
         this.scene.add(billboard);
         this.sceneryObjects.push(billboard);
+        
+        // Johnson McGinnis roadside sign
+        const jmSign = this.createRoadsideSign();
+        const jmSide = Math.random() > 0.5 ? -1 : 1;
+        jmSign.position.set(carX + jmSide * (roadSide + 8), 0, carZ - 30);
+        jmSign.rotation.y = this.car ? this.car.rotation.y : 0;
+        this.scene.add(jmSign);
+        this.sceneryObjects.push(jmSign);
         
         // Additional scattered trees in fields - MINIMUM 40 from road center, only AHEAD
         for (let i = 0; i < treeCount; i++) {
             const tree = this.createTree(treeStyle);
             const side = Math.random() > 0.5 ? -1 : 1;
             tree.position.set(
-                carX + side * (40 + Math.random() * 25),
+                carX + side * (34 + Math.random() * 24),
                 0,
                 carZ - 10 - Math.random() * 60 // Only ahead of car
             );
@@ -1066,7 +1079,7 @@ class GameRenderer {
             const bush = this.createBush();
             const side = Math.random() > 0.5 ? -1 : 1;
             bush.position.set(
-                carX + side * (30 + Math.random() * 25),
+                carX + side * (26 + Math.random() * 20),
                 0,
                 carZ - 5 - Math.random() * 55 // Only ahead
             );
@@ -1079,7 +1092,7 @@ class GameRenderer {
             const rock = this.createRock();
             const side = Math.random() > 0.5 ? -1 : 1;
             rock.position.set(
-                carX + side * (25 + Math.random() * 30),
+                carX + side * (22 + Math.random() * 24),
                 0,
                 carZ - 5 - Math.random() * 60 // Only ahead
             );
@@ -1311,7 +1324,7 @@ class GameRenderer {
             planeGeo.translate(0, height / 2, 0);
             const plane = new THREE.Mesh(planeGeo, material);
             // Push down slightly to bury the transparent bottom pixels of the PNG
-            plane.position.y = -1.5;
+            plane.position.y = -4.5;
             barn.add(plane);
         } else {
             // Fallback to 3D barn
@@ -1600,7 +1613,7 @@ class GameRenderer {
             
             // Left side tree
             const leftTree = this.createTree(treeStyle);
-            const leftOffset = roadSide + 12 + Math.random() * 8;
+            const leftOffset = roadSide + 10 + Math.random() * 6;
             leftTree.position.set(
                 baseX - Math.cos(carRot) * leftOffset,
                 0,
@@ -1610,7 +1623,7 @@ class GameRenderer {
             
             // Right side tree
             const rightTree = this.createTree(treeStyle);
-            const rightOffset = roadSide + 12 + Math.random() * 8;
+            const rightOffset = roadSide + 10 + Math.random() * 6;
             rightTree.position.set(
                 baseX + Math.cos(carRot) * rightOffset,
                 0,
@@ -1627,11 +1640,11 @@ class GameRenderer {
         if (config.barnSide !== 'none') {
             const barn = this.createBarn();
             const barnSide = config.barnSide === 'left' ? -1 : 1;
-            const barnDist = 35 + Math.random() * 15;
+            const barnDist = 32 + Math.random() * 12;
             barn.position.set(
-                carX - Math.sin(carRot) * barnDist + Math.cos(carRot) * barnSide * 28,
+                carX - Math.sin(carRot) * barnDist + Math.cos(carRot) * barnSide * 24,
                 0,
-                carZ - Math.cos(carRot) * barnDist - Math.sin(carRot) * barnSide * 28
+                carZ - Math.cos(carRot) * barnDist - Math.sin(carRot) * barnSide * 24
             );
             barn.rotation.y = carRot;
             objects.push(barn);
@@ -1641,11 +1654,11 @@ class GameRenderer {
         for (let h = 0; h < 2; h++) {
             const hSide = (h === 0) ? (config.barnSide === 'left' ? 1 : -1) : (Math.random() > 0.5 ? 1 : -1);
             const house = this.createHouse();
-            const houseDist = 40 + h * 25 + Math.random() * 10;
+            const houseDist = 36 + h * 22 + Math.random() * 8;
             house.position.set(
-                carX - Math.sin(carRot) * houseDist + Math.cos(carRot) * hSide * (28 + Math.random() * 6),
+                carX - Math.sin(carRot) * houseDist + Math.cos(carRot) * hSide * (24 + Math.random() * 5),
                 0,
-                carZ - Math.cos(carRot) * houseDist - Math.sin(carRot) * hSide * (28 + Math.random() * 6)
+                carZ - Math.cos(carRot) * houseDist - Math.sin(carRot) * hSide * (24 + Math.random() * 5)
             );
             house.rotation.y = carRot;
             objects.push(house);
@@ -1654,14 +1667,38 @@ class GameRenderer {
         // Billboard along the road (branding per specs)
         const billboard = this.createBillboard();
         const bbSide = Math.random() > 0.5 ? -1 : 1;
-        const bbDist = 55 + Math.random() * 15;
+        const bbDist = 50 + Math.random() * 12;
         billboard.position.set(
-            carX - Math.sin(carRot) * bbDist + Math.cos(carRot) * bbSide * (roadSide + 8),
+            carX - Math.sin(carRot) * bbDist + Math.cos(carRot) * bbSide * (roadSide + 5),
             0,
-            carZ - Math.cos(carRot) * bbDist - Math.sin(carRot) * bbSide * (roadSide + 8)
+            carZ - Math.cos(carRot) * bbDist - Math.sin(carRot) * bbSide * (roadSide + 5)
         );
         billboard.rotation.y = carRot;
         objects.push(billboard);
+        
+        // Second billboard for extra branding (opposite side, different distance)
+        const billboard2 = this.createBillboard();
+        const bb2Side = -bbSide;
+        const bb2Dist = 25 + Math.random() * 10;
+        billboard2.position.set(
+            carX - Math.sin(carRot) * bb2Dist + Math.cos(carRot) * bb2Side * (roadSide + 8),
+            0,
+            carZ - Math.cos(carRot) * bb2Dist - Math.sin(carRot) * bb2Side * (roadSide + 8)
+        );
+        billboard2.rotation.y = carRot;
+        objects.push(billboard2);
+        
+        // Johnson McGinnis roadside sign for subtle branding
+        const jmSign = this.createRoadsideSign();
+        const jmSide = Math.random() > 0.5 ? -1 : 1;
+        const jmDist = 70 + Math.random() * 15;
+        jmSign.position.set(
+            carX - Math.sin(carRot) * jmDist + Math.cos(carRot) * jmSide * (roadSide + 4),
+            0,
+            carZ - Math.cos(carRot) * jmDist - Math.sin(carRot) * jmSide * (roadSide + 4)
+        );
+        jmSign.rotation.y = carRot;
+        objects.push(jmSign);
         
         // Lake — always included, closer to road
         const lake = this.createLakeForDirection(carX, carZ, carRot, config.lakeSide);
@@ -1673,9 +1710,9 @@ class GameRenderer {
             const side = Math.random() > 0.5 ? -1 : 1;
             const dist = 10 + Math.random() * 65;
             bush.position.set(
-                carX - Math.sin(carRot) * dist + Math.cos(carRot) * side * (15 + Math.random() * 20),
+                carX - Math.sin(carRot) * dist + Math.cos(carRot) * side * (13 + Math.random() * 16),
                 0,
-                carZ - Math.cos(carRot) * dist - Math.sin(carRot) * side * (15 + Math.random() * 20)
+                carZ - Math.cos(carRot) * dist - Math.sin(carRot) * side * (13 + Math.random() * 16)
             );
             objects.push(bush);
         }
@@ -1686,9 +1723,9 @@ class GameRenderer {
             const side = Math.random() > 0.5 ? -1 : 1;
             const dist = 10 + Math.random() * 60;
             rock.position.set(
-                carX - Math.sin(carRot) * dist + Math.cos(carRot) * side * (15 + Math.random() * 25),
+                carX - Math.sin(carRot) * dist + Math.cos(carRot) * side * (13 + Math.random() * 20),
                 0,
-                carZ - Math.cos(carRot) * dist - Math.sin(carRot) * side * (15 + Math.random() * 25)
+                carZ - Math.cos(carRot) * dist - Math.sin(carRot) * side * (13 + Math.random() * 20)
             );
             objects.push(rock);
         }
@@ -1894,25 +1931,27 @@ class GameRenderer {
         }
         
         if (this.state === 'ARRIVING') {
-            // Drive steadily toward the parking area — car should pass the billboard first
-            const targetSpeed = Math.max(5, this.carSpeed * 0.99);
+            // Drive steadily toward the parking area
+            const targetSpeed = Math.max(4, this.carSpeed * 0.995);
             this.carSpeed = targetSpeed;
             
             this.car.position.x -= Math.sin(this.car.rotation.y) * this.carSpeed * delta;
             this.car.position.z -= Math.cos(this.car.rotation.y) * this.carSpeed * delta;
             
-            // Start parking only when very close to spot (car has already passed billboard)
+            // Subtle driving bounce
+            this.car.position.y = Math.sin(Date.now() * 0.004) * 0.02;
+            
+            // Start parking when approaching the spot
             if (this.parkingSpot) {
                 const dx = this.car.position.x - this.parkingSpot.x;
                 const dz = this.car.position.z - this.parkingSpot.z;
                 const distToParking = Math.sqrt(dx * dx + dz * dz);
                 
-                if (distToParking < 15) {
+                if (distToParking < 18) {
                     this.setState('PARKING');
                     this.parkingProgress = 0;
                     this.parkingStartPos = { x: this.car.position.x, z: this.car.position.z };
                     this.parkingStartRot = this.car.rotation.y;
-                    // Target rotation: aligned with the lane direction (same as car forward)
                     this.parkingTargetRot = this.car.rotation.y;
                     this.parkingWaitStarted = false;
                 }
@@ -1923,19 +1962,19 @@ class GameRenderer {
         }
         
         if (this.state === 'PARKING') {
-            // Smooth pull-in parking: decelerate → glide into spot → stop exactly between lanes
-            this.parkingProgress += delta * 0.45; // ~2.2 seconds total
+            // Two phases: (1) decelerate + steer right into lane, (2) straighten + stop
+            this.parkingProgress += delta * 0.35; // ~2.8 seconds total for smooth pull-in
             
             if (this.parkingProgress >= 1) {
                 this.parkingProgress = 1;
                 this.carSpeed = 0;
                 this.car.position.y = 0;
-                // Place car exactly at the parking spot center, aligned with lanes
+                this.car.rotation.z = 0;
+                // Snap to exact parking spot, aligned with road
                 this.car.position.x = this.parkingSpot.x;
                 this.car.position.z = this.parkingSpot.z;
                 this.car.rotation.y = this.parkingTargetRot;
                 
-                // Wait 1.5 seconds with car parked before triggering results
                 if (!this.parkingWaitStarted) {
                     this.parkingWaitStarted = true;
                     setTimeout(() => {
@@ -1945,26 +1984,39 @@ class GameRenderer {
             } else {
                 const t = this.parkingProgress;
                 
+                // Phase 1 (0-0.6): steer right into the parking lane
+                // Phase 2 (0.6-1.0): straighten and glide to spot
+                const steerPhase = Math.min(t / 0.6, 1);
+                const straightenPhase = Math.max((t - 0.6) / 0.4, 0);
+                
                 const dx = this.parkingSpot.x - this.parkingStartPos.x;
                 const dz = this.parkingSpot.z - this.parkingStartPos.z;
                 
-                // Ease-out deceleration curve (fast at start, slow at end)
-                const easeOut = 1 - Math.pow(1 - t, 3);
+                // Smooth S-curve for lateral movement (steer in then straighten)
+                const lateralEase = this.easeInOutCubic(t);
+                const forwardEase = t; // Linear forward motion
                 
-                // Smoothly interpolate position from start to parking spot
-                this.car.position.x = this.parkingStartPos.x + dx * easeOut;
-                this.car.position.z = this.parkingStartPos.z + dz * easeOut;
+                // Blend: car moves forward linearly, laterally with S-curve
+                const forwardDir = { x: -Math.sin(this.parkingTargetRot), z: -Math.cos(this.parkingTargetRot) };
+                const lateralDir = { x: Math.cos(this.parkingTargetRot), z: -Math.sin(this.parkingTargetRot) };
                 
-                // Gentle rotation: start from current heading, end aligned with parking lanes
-                const rotDiff = this.parkingTargetRot - this.parkingStartRot;
-                // Normalize rotation difference
-                let normRot = rotDiff;
-                while (normRot > Math.PI) normRot -= Math.PI * 2;
-                while (normRot < -Math.PI) normRot += Math.PI * 2;
-                this.car.rotation.y = this.parkingStartRot + normRot * this.easeInOutQuad(t);
+                // Decompose displacement into forward and lateral components
+                const totalForward = dx * forwardDir.x + dz * forwardDir.z;
+                const totalLateral = dx * lateralDir.x + dz * lateralDir.z;
                 
-                // Subtle deceleration bounce (disappears as car stops)
-                this.car.position.y = Math.sin(t * Math.PI * 2) * 0.01 * (1 - t);
+                this.car.position.x = this.parkingStartPos.x + 
+                    forwardDir.x * totalForward * forwardEase + 
+                    lateralDir.x * totalLateral * lateralEase;
+                this.car.position.z = this.parkingStartPos.z + 
+                    forwardDir.z * totalForward * forwardEase + 
+                    lateralDir.z * totalLateral * lateralEase;
+                
+                // Slight steering angle during phase 1, then straighten in phase 2
+                const steerAngle = Math.sin(steerPhase * Math.PI) * 0.12 * (1 - straightenPhase);
+                this.car.rotation.y = this.parkingTargetRot + steerAngle;
+                
+                // Subtle settling bounce that fades
+                this.car.position.y = Math.sin(t * Math.PI * 3) * 0.008 * (1 - t);
             }
         }
         
@@ -2011,6 +2063,78 @@ class GameRenderer {
                 
                 // Slight random tilt for realism
                 this.car.rotation.z = Math.sin(t * Math.PI * 4) * 0.04 * (1 - t);
+            }
+        }
+        
+        if (this.state === 'TREE_HIT') {
+            this.treeHitProgress += delta * 0.85; // ~1.2 seconds
+            
+            if (this.treeHitProgress >= 1) {
+                this.treeHitProgress = 0;
+                this.car.position.y = 0;
+                this.car.rotation.z = 0;
+                this.setState('STOPPED');
+                setTimeout(() => this.cleanupFallenTree(), 500);
+                if (this.treeHitCallback) {
+                    this.treeHitCallback();
+                    this.treeHitCallback = null;
+                }
+            } else {
+                const t = this.treeHitProgress;
+                // Drive forward into the tree area
+                const fwdSpeed = 7;
+                this.car.position.x -= Math.sin(this.car.rotation.y) * fwdSpeed * delta;
+                this.car.position.z -= Math.cos(this.car.rotation.y) * fwdSpeed * delta;
+                
+                // Swerve right to avoid the tree trunk (t=0.15-0.65)
+                if (t > 0.15 && t < 0.65) {
+                    const swerveT = (t - 0.15) / 0.5;
+                    const swerveForce = Math.sin(swerveT * Math.PI) * 4;
+                    this.car.position.x += Math.cos(this.car.rotation.y) * swerveForce * delta;
+                    this.car.position.z -= Math.sin(this.car.rotation.y) * swerveForce * delta;
+                }
+                
+                // Violent jolt from hitting branches (t=0.25-0.7)
+                if (t > 0.25 && t < 0.7) {
+                    const joltT = (t - 0.25) / 0.45;
+                    this.car.position.y = Math.sin(joltT * Math.PI * 6) * 0.2 * (1 - joltT);
+                } else if (t >= 0.7) {
+                    this.car.position.y = Math.sin((t - 0.7) / 0.3 * Math.PI) * 0.05 * (1 - t);
+                }
+                
+                // Strong tilt/shake from impact
+                this.car.rotation.z = Math.sin(t * Math.PI * 5) * 0.07 * (1 - t);
+            }
+        }
+        
+        if (this.state === 'SWERVING') {
+            this.swerveProgress += delta * 1.5; // ~0.67 seconds
+            
+            if (this.swerveProgress >= 1) {
+                this.swerveProgress = 0;
+                this.car.position.y = 0;
+                this.car.rotation.z = 0;
+                this.setState('STOPPED');
+                setTimeout(() => this.cleanupRoadDebris(), 400);
+                if (this.swerveCallback) {
+                    this.swerveCallback();
+                    this.swerveCallback = null;
+                }
+            } else {
+                const t = this.swerveProgress;
+                // Drive forward through the debris
+                const fwdSpeed = 5;
+                this.car.position.x -= Math.sin(this.car.rotation.y) * fwdSpeed * delta;
+                this.car.position.z -= Math.cos(this.car.rotation.y) * fwdSpeed * delta;
+                
+                // S-curve swerve: left then right
+                const swerveForce = Math.sin(t * Math.PI * 2) * 2.5;
+                this.car.position.x += Math.cos(this.car.rotation.y) * swerveForce * delta;
+                this.car.position.z -= Math.sin(this.car.rotation.y) * swerveForce * delta;
+                
+                // Mild bounce/rattle
+                this.car.position.y = Math.abs(Math.sin(t * Math.PI * 4)) * 0.1 * (1 - t);
+                this.car.rotation.z = Math.sin(t * Math.PI * 3) * 0.035 * (1 - t);
             }
         }
         
@@ -2165,6 +2289,364 @@ class GameRenderer {
         this.potholeObjects = [];
     }
     
+    // === FALLEN TREE SYSTEM (tree consequence) ===
+    
+    createFallenTree() {
+        const group = new THREE.Group();
+        const carRot = this.car.rotation.y;
+        
+        // Position 14 units ahead so player sees it before the car hits
+        const pX = this.car.position.x - Math.sin(carRot) * 14;
+        const pZ = this.car.position.z - Math.cos(carRot) * 14;
+        
+        // Large trunk lying across the road
+        const trunkGeo = new THREE.CylinderGeometry(0.45, 0.55, 12, 10);
+        const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5D4037 });
+        const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+        trunk.rotation.z = Math.PI / 2;
+        trunk.rotation.y = carRot;
+        trunk.position.set(pX, 0.55, pZ);
+        trunk.castShadow = true;
+        group.add(trunk);
+        
+        // Canopy/leaves at one end
+        const leafMat = new THREE.MeshLambertMaterial({ color: 0x2E7D32 });
+        const canopy1 = new THREE.Mesh(new THREE.SphereGeometry(2.5, 10, 8), leafMat);
+        canopy1.position.set(
+            pX + Math.cos(carRot) * 5.5,
+            1.4,
+            pZ - Math.sin(carRot) * 5.5
+        );
+        group.add(canopy1);
+        
+        const canopy2 = new THREE.Mesh(new THREE.SphereGeometry(1.8, 8, 6), new THREE.MeshLambertMaterial({ color: 0x388E3C }));
+        canopy2.position.set(
+            pX + Math.cos(carRot) * 4,
+            2.0,
+            pZ - Math.sin(carRot) * 4
+        );
+        group.add(canopy2);
+        
+        // Smaller branch at other end
+        const branch = new THREE.Mesh(new THREE.SphereGeometry(1.2, 8, 6), leafMat);
+        branch.position.set(
+            pX - Math.cos(carRot) * 5,
+            0.8,
+            pZ + Math.sin(carRot) * 5
+        );
+        group.add(branch);
+        
+        // Broken branches scattered on road
+        for (let i = 0; i < 6; i++) {
+            const branchGeo = new THREE.CylinderGeometry(0.06, 0.1, 1.5 + Math.random() * 2, 5);
+            const b = new THREE.Mesh(branchGeo, trunkMat);
+            b.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+            b.position.set(
+                pX + (Math.random() - 0.5) * 8,
+                0.25 + Math.random() * 0.3,
+                pZ + (Math.random() - 0.5) * 5
+            );
+            group.add(b);
+        }
+        
+        // Leaf debris on the road
+        for (let i = 0; i < 12; i++) {
+            const debrisGeo = new THREE.CircleGeometry(0.2 + Math.random() * 0.3, 5);
+            const debrisMat = new THREE.MeshBasicMaterial({
+                color: Math.random() > 0.3 ? 0x2E7D32 : 0x4CAF50,
+                side: THREE.DoubleSide
+            });
+            const debris = new THREE.Mesh(debrisGeo, debrisMat);
+            debris.rotation.x = -Math.PI / 2 + (Math.random() - 0.5) * 0.3;
+            debris.position.set(
+                pX + (Math.random() - 0.5) * 10,
+                0.07,
+                pZ + (Math.random() - 0.5) * 7
+            );
+            group.add(debris);
+        }
+        
+        this.scene.add(group);
+        this.fallenTreeObjects.push(group);
+        return group;
+    }
+    
+    triggerTreeHit(callback) {
+        this.createFallenTree();
+        this.treeHitProgress = 0;
+        this.treeHitCallback = callback;
+        this.setState('TREE_HIT');
+    }
+    
+    cleanupFallenTree() {
+        this.fallenTreeObjects.forEach(obj => this.scene.remove(obj));
+        this.fallenTreeObjects = [];
+    }
+    
+    // === ROAD DEBRIS / SWERVE SYSTEM (bump consequence) ===
+    
+    createRoadDebris() {
+        const group = new THREE.Group();
+        const carRot = this.car.rotation.y;
+        
+        // Position 10 units ahead
+        const pX = this.car.position.x - Math.sin(carRot) * 10;
+        const pZ = this.car.position.z - Math.cos(carRot) * 10;
+        
+        // Scattered rocks/gravel on the road
+        for (let i = 0; i < 7; i++) {
+            const rockGeo = new THREE.DodecahedronGeometry(0.3 + Math.random() * 0.35, 0);
+            const rockMat = new THREE.MeshLambertMaterial({
+                color: new THREE.Color().setHSL(0.08, 0.25, 0.35 + Math.random() * 0.15)
+            });
+            const rock = new THREE.Mesh(rockGeo, rockMat);
+            rock.position.set(
+                pX + (Math.random() - 0.5) * 5,
+                0.25,
+                pZ + (Math.random() - 0.5) * 4
+            );
+            rock.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
+            rock.scale.set(1, 0.6, 1);
+            group.add(rock);
+        }
+        
+        // Orange warning cone
+        const coneMat = new THREE.MeshLambertMaterial({ color: 0xFF6600 });
+        const coneGeo = new THREE.ConeGeometry(0.25, 0.9, 8);
+        const cone = new THREE.Mesh(coneGeo, coneMat);
+        cone.position.set(pX + 2, 0.45, pZ - 0.5);
+        group.add(cone);
+        
+        // White stripe on cone
+        const stripeGeo = new THREE.CylinderGeometry(0.27, 0.24, 0.12, 8);
+        const stripeMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
+        const stripe = new THREE.Mesh(stripeGeo, stripeMat);
+        stripe.position.set(pX + 2, 0.55, pZ - 0.5);
+        group.add(stripe);
+        
+        // Dirt/gravel patch on road
+        const patchGeo = new THREE.CircleGeometry(2.5, 12);
+        const patchMat = new THREE.MeshBasicMaterial({ color: 0x6B5B3A, side: THREE.DoubleSide });
+        const patch = new THREE.Mesh(patchGeo, patchMat);
+        patch.rotation.x = -Math.PI / 2;
+        patch.position.set(pX, 0.06, pZ);
+        group.add(patch);
+        
+        this.scene.add(group);
+        this.roadDebrisObjects.push(group);
+        return group;
+    }
+    
+    triggerSwerve(callback) {
+        this.createRoadDebris();
+        this.swerveProgress = 0;
+        this.swerveCallback = callback;
+        this.setState('SWERVING');
+    }
+    
+    cleanupRoadDebris() {
+        this.roadDebrisObjects.forEach(obj => this.scene.remove(obj));
+        this.roadDebrisObjects = [];
+    }
+    
+    // === DIRECTION SIGNS AT INTERSECTION ===
+    
+    createDirectionSign(text, direction) {
+        const signGroup = new THREE.Group();
+        
+        // Create canvas texture with direction arrow + answer text
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 256;
+        const ctx = canvas.getContext('2d');
+        
+        // Green highway sign background with rounded corners
+        const r = 14;
+        ctx.fillStyle = '#006B3F';
+        ctx.beginPath();
+        ctx.moveTo(r, 0);
+        ctx.lineTo(512 - r, 0);
+        ctx.quadraticCurveTo(512, 0, 512, r);
+        ctx.lineTo(512, 256 - r);
+        ctx.quadraticCurveTo(512, 256, 512 - r, 256);
+        ctx.lineTo(r, 256);
+        ctx.quadraticCurveTo(0, 256, 0, 256 - r);
+        ctx.lineTo(0, r);
+        ctx.quadraticCurveTo(0, 0, r, 0);
+        ctx.closePath();
+        ctx.fill();
+        
+        // White border
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 6;
+        ctx.stroke();
+        
+        // Direction arrow
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 56px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        let arrow = '\u2190'; // ←
+        if (direction === 'straight') arrow = '\u2191'; // ↑
+        if (direction === 'right') arrow = '\u2192'; // →
+        ctx.fillText(arrow, 256, 65);
+        
+        // Answer text (word-wrapped)
+        ctx.font = '24px Arial, sans-serif';
+        const maxWidth = 460;
+        const words = text.split(' ');
+        let line = '';
+        let y = 110;
+        const lineHeight = 32;
+        const maxLines = 4;
+        let lineCount = 0;
+        
+        for (const word of words) {
+            const testLine = line + (line ? ' ' : '') + word;
+            if (ctx.measureText(testLine).width > maxWidth && line) {
+                ctx.fillText(line, 256, y);
+                line = word;
+                y += lineHeight;
+                lineCount++;
+                if (lineCount >= maxLines - 1) {
+                    line += '...';
+                    break;
+                }
+            } else {
+                line = testLine;
+            }
+        }
+        if (line) ctx.fillText(line, 256, y);
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        const material = new THREE.MeshBasicMaterial({
+            map: texture,
+            transparent: true,
+            side: THREE.DoubleSide
+        });
+        
+        // Sign panel
+        const panelGeo = new THREE.PlaneGeometry(6, 3);
+        const panel = new THREE.Mesh(panelGeo, material);
+        panel.position.y = 5.5;
+        signGroup.add(panel);
+        
+        // Metal post
+        const postGeo = new THREE.CylinderGeometry(0.07, 0.07, 5, 8);
+        const postMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
+        const post = new THREE.Mesh(postGeo, postMat);
+        post.position.y = 2.5;
+        signGroup.add(post);
+        
+        return signGroup;
+    }
+    
+    createDirectionSigns(leftText, straightText, rightText) {
+        this.removeDirectionSigns();
+        
+        const spacing = 8; // Space between sign centers
+        const signZ = 2;   // In junction, close to approaching car
+        
+        // Left direction sign
+        const leftSign = this.createDirectionSign(leftText, 'left');
+        leftSign.position.set(-spacing, 0, signZ);
+        this.intersectionGroup.add(leftSign);
+        this.directionSignObjects.push(leftSign);
+        
+        // Straight direction sign (center)
+        const straightSign = this.createDirectionSign(straightText, 'straight');
+        straightSign.position.set(0, 0, signZ);
+        this.intersectionGroup.add(straightSign);
+        this.directionSignObjects.push(straightSign);
+        
+        // Right direction sign
+        const rightSign = this.createDirectionSign(rightText, 'right');
+        rightSign.position.set(spacing, 0, signZ);
+        this.intersectionGroup.add(rightSign);
+        this.directionSignObjects.push(rightSign);
+    }
+    
+    removeDirectionSigns() {
+        this.directionSignObjects.forEach(sign => {
+            if (sign.parent) sign.parent.remove(sign);
+        });
+        this.directionSignObjects = [];
+    }
+    
+    // === BRANDING ROADSIDE SIGN ===
+    
+    createRoadsideSign() {
+        const signGroup = new THREE.Group();
+        
+        // Create canvas with Johnson McGinnis branding
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 256;
+        const ctx = canvas.getContext('2d');
+        
+        // Warm professional brown background
+        ctx.fillStyle = '#5C3D1E';
+        ctx.fillRect(0, 0, 512, 256);
+        
+        // Gold border (double)
+        ctx.strokeStyle = '#D4A437';
+        ctx.lineWidth = 8;
+        ctx.strokeRect(8, 8, 496, 240);
+        ctx.lineWidth = 2;
+        ctx.strokeRect(18, 18, 476, 220);
+        
+        // Firm name
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 38px Georgia, serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('JOHNSON McGINNIS', 256, 95);
+        
+        // Tagline
+        ctx.font = '24px Georgia, serif';
+        ctx.fillStyle = '#D4A437';
+        ctx.fillText('Elder Law Attorneys', 256, 140);
+        
+        // Separator line
+        ctx.strokeStyle = '#D4A437';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(120, 160);
+        ctx.lineTo(392, 160);
+        ctx.stroke();
+        
+        // Website
+        ctx.font = '18px Arial, sans-serif';
+        ctx.fillStyle = '#CCC';
+        ctx.fillText('johnsonmcginnis.com', 256, 195);
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        const material = new THREE.MeshBasicMaterial({
+            map: texture,
+            side: THREE.DoubleSide
+        });
+        
+        // Sign panel (smaller than billboards)
+        const panelGeo = new THREE.PlaneGeometry(4.5, 2.25);
+        const panel = new THREE.Mesh(panelGeo, material);
+        panel.position.y = 3.5;
+        signGroup.add(panel);
+        
+        // Two wooden posts
+        const postMat = new THREE.MeshLambertMaterial({ color: 0x6B4226 });
+        const postGeo = new THREE.CylinderGeometry(0.08, 0.1, 3.5, 6);
+        
+        const leftPost = new THREE.Mesh(postGeo, postMat);
+        leftPost.position.set(-1.8, 1.75, 0);
+        leftPost.castShadow = true;
+        signGroup.add(leftPost);
+        
+        const rightPost = new THREE.Mesh(postGeo, postMat);
+        rightPost.position.set(1.8, 1.75, 0);
+        rightPost.castShadow = true;
+        signGroup.add(rightPost);
+        
+        return signGroup;
+    }
+    
     // === PUBLIC API ===
     
     startDriving() {
@@ -2220,6 +2702,7 @@ class GameRenderer {
     }
 
     turn(direction) {
+        this.removeDirectionSigns();
         this.turnDirection = direction;
         this.turnProgress = 0;
         this.car.rotation.z = 0; // Reset any bump tilt
@@ -2314,7 +2797,7 @@ class GameRenderer {
     }
     
     driveToFinish() {
-        // Create final destination scenery with barn close to road
+        // Build final destination first (invisible), then cross-fade
         this.createFinalDestination();
         
         this.setState('ARRIVING');
@@ -2323,32 +2806,20 @@ class GameRenderer {
     }
     
     createFinalDestination() {
-        // Clear old scenery
-        this.sceneryObjects.forEach(obj => this.scene.remove(obj));
-        this.sceneryObjects = [];
+        // Build final scene objects into a temporary array first
+        const newObjects = [];
         
         const carX = this.car.position.x;
         const carZ = this.car.position.z;
         const carRot = this.car.rotation.y;
         const roadSide = this.ROAD_WIDTH / 2 + 8;
         
-        // === JOHNSON McGINNIS BILLBOARD SIGN — car passes this first ===
-        const signDist = 30;
-        const signSideOffset = 10;
-        const sign = this.createBillboard();
-        sign.position.set(
-            carX - Math.sin(carRot) * signDist + Math.cos(carRot) * signSideOffset,
-            0,
-            carZ - Math.cos(carRot) * signDist - Math.sin(carRot) * signSideOffset
-        );
-        sign.rotation.y = carRot; // Face approaching car
-        this.scene.add(sign);
-        this.sceneryObjects.push(sign);
-        
-        // === JOHNSON McGINNIS OFFICE (House) — behind the parking lot ===
-        const officeDist = 85;
-        const officeSideOffset = 22;
+        // === LARGE OFFICE / HOME — already visible as car drives toward it ===
+        const officeDist = 90;
+        const officeSideOffset = 18;
         const office = this.createHouse();
+        // Scale up to make it a prominent building
+        office.scale.set(1.6, 1.6, 1.6);
         office.position.set(
             carX - Math.sin(carRot) * officeDist + Math.cos(carRot) * officeSideOffset,
             0,
@@ -2356,70 +2827,93 @@ class GameRenderer {
         );
         office.rotation.y = carRot - Math.PI / 6;
         this.scene.add(office);
-        this.sceneryObjects.push(office);
+        newObjects.push(office);
         this.destinationBarn = office;
         
-        // === PARKING SPOT — between billboard and office, car glides in here ===
+        // === BILLBOARD — in front of office, visible early ===
+        const signDist = 40;
+        const signSideOffset = 12;
+        const sign = this.createBillboard();
+        sign.position.set(
+            carX - Math.sin(carRot) * signDist + Math.cos(carRot) * signSideOffset,
+            0,
+            carZ - Math.cos(carRot) * signDist - Math.sin(carRot) * signSideOffset
+        );
+        sign.rotation.y = carRot;
+        this.scene.add(sign);
+        newObjects.push(sign);
+        
+        // === PARKING LOT — right shoulder of road with marked lanes ===
+        // Park spot is on the RIGHT side of the road, slightly off-shoulder
+        const parkDist = 70;
+        const parkLateralOffset = this.ROAD_WIDTH / 2 + 4; // Just off the right edge
         this.parkingSpot = {
-            x: carX - Math.sin(carRot) * 68 + Math.cos(carRot) * 3,
-            z: carZ - Math.cos(carRot) * 68 - Math.sin(carRot) * 3
+            x: carX - Math.sin(carRot) * parkDist + Math.cos(carRot) * parkLateralOffset,
+            z: carZ - Math.cos(carRot) * parkDist - Math.sin(carRot) * parkLateralOffset
         };
         
-        // Parking lot surface (wider for clear visibility)
-        const parkingGeo = new THREE.PlaneGeometry(24, 30);
+        // Parking lot surface
+        const parkingGeo = new THREE.PlaneGeometry(10, 28);
         const parkingMat = new THREE.MeshLambertMaterial({ color: 0x555555 });
         const parkingLot = new THREE.Mesh(parkingGeo, parkingMat);
         parkingLot.rotation.x = -Math.PI / 2;
         parkingLot.rotation.z = carRot;
         parkingLot.position.set(this.parkingSpot.x, 0.03, this.parkingSpot.z);
         this.scene.add(parkingLot);
-        this.sceneryObjects.push(parkingLot);
+        newObjects.push(parkingLot);
         
-        // Parking lot lines (white stripes) — 5 lanes
+        // Parking lane lines (white stripes) — 3 lanes
         const stripeMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
-        for (let i = -2; i <= 2; i++) {
-            const stripeGeo = new THREE.PlaneGeometry(0.25, 6);
+        for (let i = -1; i <= 1; i++) {
+            const stripeGeo = new THREE.PlaneGeometry(0.2, 8);
             const stripe = new THREE.Mesh(stripeGeo, stripeMat);
             stripe.rotation.x = -Math.PI / 2;
             stripe.rotation.z = carRot;
             stripe.position.set(
-                this.parkingSpot.x + Math.cos(carRot) * (i * 3.5),
+                this.parkingSpot.x + Math.cos(carRot) * (i * 3.2),
                 0.04,
-                this.parkingSpot.z - Math.sin(carRot) * (i * 3.5)
+                this.parkingSpot.z - Math.sin(carRot) * (i * 3.2)
             );
             this.scene.add(stripe);
-            this.sceneryObjects.push(stripe);
+            newObjects.push(stripe);
         }
         
-        // === TREES around the final area ===
-        for (let dist = 30; dist < 100; dist += 18) {
+        // === TREES along both sides ===
+        for (let dist = 25; dist < 110; dist += 16) {
             const baseX = carX - Math.sin(carRot) * dist;
             const baseZ = carZ - Math.cos(carRot) * dist;
             
             // Left side trees
-            const leftTree = this.createTree('mixed');
+            const leftTree = this.createTree('green');
             leftTree.position.set(
-                baseX - Math.cos(carRot) * (roadSide + 15),
+                baseX - Math.cos(carRot) * (roadSide + 12),
                 0,
-                baseZ + Math.sin(carRot) * (roadSide + 15)
+                baseZ + Math.sin(carRot) * (roadSide + 12)
             );
             this.scene.add(leftTree);
-            this.sceneryObjects.push(leftTree);
+            newObjects.push(leftTree);
             
-            // Right side trees (fewer, leave space for parking)
-            if (dist > 55) {
-                const rightTree = this.createTree('mixed');
+            // Right side trees — skip near parking area
+            if (dist < 55 || dist > 85) {
+                const rightTree = this.createTree('green');
                 rightTree.position.set(
-                    baseX + Math.cos(carRot) * (roadSide + 28),
+                    baseX + Math.cos(carRot) * (roadSide + 18),
                     0,
-                    baseZ - Math.sin(carRot) * (roadSide + 28)
+                    baseZ - Math.sin(carRot) * (roadSide + 18)
                 );
                 this.scene.add(rightTree);
-                this.sceneryObjects.push(rightTree);
+                newObjects.push(rightTree);
             }
         }
         
-        // Add bushes around office
+        // Lake on the left side
+        const lake = this.createLakeForDirection(carX, carZ, carRot, 'left');
+        if (lake) {
+            this.scene.add(lake);
+            newObjects.push(lake);
+        }
+        
+        // Bushes around office
         for (let i = 0; i < 5; i++) {
             const bush = this.createBush();
             const angle = (i / 5) * Math.PI * 0.6 + Math.PI * 0.2;
@@ -2429,16 +2923,16 @@ class GameRenderer {
                 office.position.z + Math.sin(angle) * (12 + Math.random() * 5)
             );
             this.scene.add(bush);
-            this.sceneryObjects.push(bush);
+            newObjects.push(bush);
         }
         
-        // === FENCES with proper rails on left side ===
+        // === FENCES on left side ===
         const fenceGroup = new THREE.Group();
         const postMat = new THREE.MeshLambertMaterial({ color: 0x8B5A3C });
         const railMat = new THREE.MeshLambertMaterial({ color: 0x7A4A30 });
         const fencePosts = [];
         
-        for (let dist = 20; dist < 90; dist += 5) {
+        for (let dist = 20; dist < 95; dist += 5) {
             const baseX = carX - Math.sin(carRot) * dist;
             const baseZ = carZ - Math.cos(carRot) * dist;
             
@@ -2451,7 +2945,6 @@ class GameRenderer {
             fencePosts.push({ x: px, z: pz });
         }
         
-        // Add horizontal rails between posts (fixes missing rail bug)
         for (let i = 0; i < fencePosts.length - 1; i++) {
             const p1 = fencePosts[i];
             const p2 = fencePosts[i + 1];
@@ -2474,7 +2967,11 @@ class GameRenderer {
         }
         
         this.scene.add(fenceGroup);
-        this.sceneryObjects.push(fenceGroup);
+        newObjects.push(fenceGroup);
+        
+        // === NOW remove old scenery (new objects already in scene — no flash) ===
+        this.sceneryObjects.forEach(obj => this.scene.remove(obj));
+        this.sceneryObjects = newObjects;
         
         // Mark scenery as created
         this.currentRoadSceneryCreated = true;
@@ -2505,6 +3002,15 @@ class GameRenderer {
         this.cleanupPotholes();
         this.isBumping = false;
         this.bumpProgress = 0;
+        
+        // Clean up fallen trees and road debris
+        this.cleanupFallenTree();
+        this.treeHitProgress = 0;
+        this.treeHitCallback = null;
+        this.cleanupRoadDebris();
+        this.swerveProgress = 0;
+        this.swerveCallback = null;
+        this.removeDirectionSigns();
         
         this.positionIntersectionAhead();
         this.updateCamera(true);

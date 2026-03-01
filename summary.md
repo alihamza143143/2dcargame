@@ -1,4 +1,17 @@
-# Johnson McGinnis Game — Full Session Summary + Code Assessment
+﻿# Johnson McGinnis Game — Full Session Summary + Code Assessment
+
+## 0) MANDATORY MAINTENANCE POLICY (Effective Immediately)
+- This file **must be updated every time code is written, updated, or retained**.
+- No code change is considered complete until `summary.md` is updated with:
+  - what changed,
+  - why it changed,
+  - where it changed,
+  - and what remains.
+- `summary.md` is now the single source of truth for previous and current implementation context.
+
+### Latest update log
+- Date: **2026-03-01** (update 2)
+- Action: Implemented 3 gameplay features — varied consequence types, in-world direction signs, enhanced branding. Updated all sections below.
 
 ## 1) What this project is
 - A browser-based interactive estate-planning game using:
@@ -177,6 +190,33 @@ User reported 5 issues from live testing:
   - 6 small debris chunks scattered around edge for realism.
   - Bump speed slowed from `delta * 2.5` to `delta * 1.8` (~0.55s) with forward drive increased to 8 m/s so car reaches pothole.
 
+### Session 6: Gameplay features — consequences, direction signs, branding (current session)
+
+**Feature 1: Varied consequence types for wrong answers.**
+- Problem: All wrong answers triggered the same pothole/bump animation regardless of the `consequence` field already defined in `scenarios.js` (`tree`, `bump`, `pothole`).
+- Solution — 3 distinct consequence systems:
+  - **Pothole** (`triggerBump`, `createPothole`, BUMPING state): Existing system, unchanged. Car drops into crater and bounces.
+  - **Fallen tree** (`triggerTreeHit`, `createFallenTree`, TREE_HIT state): Large trunk + canopy + broken branches + leaf debris across road. Car swerves right to avoid, violent jolt + shake (~1.2s). Cleaned up after animation.
+  - **Road debris** (`triggerSwerve`, `createRoadDebris`, SWERVING state): Scattered rocks + orange warning cone + dirt patch. Car does S-curve swerve through debris, mild bounce/rattle (~0.67s). Cleaned up after animation.
+- In `main.js` `handleFeedbackOk()`: reads `this.pendingConsequence` (stored in `handleOptionSelect` from `option.consequence`) and dispatches to the matching trigger method.
+- All 3 states handled in `update(delta)` with proper cleanup in `reset()`.
+
+**Feature 2: In-world direction signs at intersections.**
+- Problem: Spec calls for road signs at intersections showing answer options tied to directions. Only the overlay UI existed.
+- Solution:
+  - `createDirectionSign(text, direction)` — Creates a green highway-style sign using CanvasTexture: dark green background, white border, direction arrow (←/↑/→), word-wrapped answer text. PlaneGeometry 6×3 on thin metal post.
+  - `createDirectionSigns(leftText, straightText, rightText)` — Creates 3 signs in a gantry row across the junction at positions (-8, 0, 2), (0, 0, 2), (8, 0, 2) in intersection local space. Added to `intersectionGroup`.
+  - Called from `showScenario()` in `main.js` when scenario card and options become visible.
+  - `removeDirectionSigns()` — Called in `turn()` (when car starts turning) and `reset()`.
+
+**Feature 3: Enhanced branding moments along the road.**
+- Problem: Only 1 billboard per road segment + final destination. Spec calls for more subtle branding throughout.
+- Solution:
+  - `createRoadsideSign()` — Creates a professional brown/gold sign with "JOHNSON McGINNIS | Elder Law Attorneys | johnsonmcginnis.com" using CanvasTexture. Smaller than billboards (4.5×2.25), on wooden posts at y=3.5.
+  - `createSceneryForDirection()` now generates: 2 billboards (was 1) on opposite sides + 1 JM roadside sign per road segment.
+  - `createRoadsideScenery()` (initial road) also adds 1 JM roadside sign.
+  - Result: player sees JM branding 3× per road segment (2 billboards + 1 sign).
+
 ---
 
 ## 3) Current code architecture
@@ -185,11 +225,12 @@ User reported 5 issues from live testing:
 - `main.js`
   - `GameController` controls screens, scoring, scenarios, and renderer callbacks.
   - Key methods: `startGame()`, `showScenario()`, `handleOptionSelect(direction)`, `handleFeedbackOk()`, `onTurnComplete()`, `showEndScreen()`
+  - `pendingConsequence` tracks the consequence type (`tree`, `bump`, `pothole`) for wrong answers.
 
 ### 3D renderer
-- `game.js` (~2237 lines)
+- `game.js` (~3050 lines)
   - `GameRenderer` manages scene, camera, road, intersection, scenery, car, and movement states.
-  - **Movement states:** IDLE → DRIVING → APPROACHING → STOPPED → TURNING → POST_TURN_DRIVING → (repeat 6x) → ARRIVING → PARKING
+  - **Movement states:** IDLE → DRIVING → APPROACHING → STOPPED → (BUMPING | TREE_HIT | SWERVING) → TURNING → POST_TURN_DRIVING → (repeat 6x) → ARRIVING → PARKING
   - **Key methods:**
     - Scene: `createRoad()`, `createIntersection()`, `createHills()`, `createScenery()`
     - Assets: `createTree()`, `createBush()`, `createBarn()`, `createBillboard()`, `createHouse()`, `createStopSign()`
@@ -198,6 +239,9 @@ User reported 5 issues from live testing:
     - Pregeneration: `pregenerateAllDirections()`, `createSceneryForDirection()`, `showPregenSceneryForDirection()`
     - Movement: `turn()`, `completeTurn()`, `driveToFinish()`, `createFinalDestination()`
     - Turn curve: Quadratic Bezier with control point at intersection center
+    - **Consequences:** `createPothole()` + `triggerBump()`, `createFallenTree()` + `triggerTreeHit()`, `createRoadDebris()` + `triggerSwerve()`
+    - **Direction signs:** `createDirectionSign(text, dir)`, `createDirectionSigns(l, s, r)`, `removeDirectionSigns()`
+    - **Branding:** `createRoadsideSign()` — JM-branded brown/gold roadside sign with canvas text
 
 ### Data
 - `scenarios.js` — 6 scenarios with 3 directional options each, correct answer marked `isCorrect: true`
@@ -244,6 +288,21 @@ User reported 5 issues from live testing:
 - Final destination: House (office) + Billboard (Johnson McGinnis sign) + parking lot with painted stripes.
 - Parking: 3-phase realistic parking (approach → turn-in → straighten) with 600ms delay before callback.
 - Hills: 360° panoramic ring (3 layers × 8 panels) centered on car — no rotation, visible from all directions.
+- **Consequence variety:** Wrong answers trigger different visual events based on `option.consequence` field:
+  - `pothole` → pothole crater on road, car jolts down/up (BUMPING state)
+  - `tree` → fallen tree with trunk/canopy/debris across road, car swerves right, violent shake (TREE_HIT state, ~1.2s)
+  - `bump` → scattered rocks/gravel + orange cone, car S-curve swerves through debris (SWERVING state, ~0.67s)
+  - Correct answers (`smooth`) → no consequence, car turns directly
+- **In-world direction signs:** 3 green highway-style signs appear at intersection when scenario is shown.
+  - Canvas-textured PlaneGeometry with direction arrow (←/↑/→) + answer text, word-wrapped
+  - Positioned in a gantry row across the junction (x = -8, 0, +8 at z = 2 in intersection local space)
+  - Signs are tall (panel at y=5.5) on thin metal posts — car can see them from stop position
+  - Removed automatically when `turn()` starts and on `reset()`
+- **Enhanced branding throughout the journey:**
+  - Each road segment now has 2 billboards (was 1) + 1 JM roadside sign
+  - JM roadside sign: brown/gold professional sign with "JOHNSON McGINNIS | Elder Law Attorneys | johnsonmcginnis.com" on wooden posts
+  - Initial road scenery also includes a JM roadside sign
+  - Final destination retains prominent billboard + office
 
 ---
 
@@ -273,6 +332,22 @@ User reported 5 issues from live testing:
 - `driveToFinish()`, `createFinalDestination()` — office/billboard/parking positions
 - `update(delta)` ARRIVING and PARKING blocks
 
+### G) "Consequence animation tweaks"
+- Pothole: `createPothole()` (visual) + `update()` BUMPING block (animation)
+- Fallen tree: `createFallenTree()` (visual) + `update()` TREE_HIT block (animation, ~1.2s, swerve + shake)
+- Road debris: `createRoadDebris()` (visual) + `update()` SWERVING block (animation, ~0.67s, S-curve)
+- Consequence type comes from `option.consequence` in `scenarios.js`
+- Mapped in `main.js` `handleFeedbackOk()` → `triggerBump/triggerTreeHit/triggerSwerve`
+
+### H) "Direction signs at intersection"
+- `createDirectionSigns(l, s, r)` in `game.js` — called from `showScenario()` in `main.js`
+- `removeDirectionSigns()` — called in `turn()` and `reset()`
+- Sign visual: `createDirectionSign(text, direction)` — canvas texture, green highway style
+
+### I) "Branding signs along road"
+- `createRoadsideSign()` — standalone method, returns a group with canvas-textured panel + posts
+- Added in `createSceneryForDirection()` and `createRoadsideScenery()`
+
 ---
 
 ## 7) Quick resume checklist
@@ -280,3 +355,48 @@ User reported 5 issues from live testing:
 2. Run `python -m http.server 8080` in project directory
 3. Open http://localhost:8080 — test full cycle: drive → stop → choose → turn → repeat
 4. Check for: turn smoothness, scenery visibility, lake rendering, fence gaps, stop sign orientation
+
+---
+
+## 8) Fresh status audit (specs.md vs current implementation)
+
+### Implemented and aligned
+- Required email gate before gameplay is implemented (`index.html`, `main.js`).
+- reCAPTCHA block is present and validated client-side when available.
+- Optional checkboxes (`over18`, `inTennessee`) are implemented.
+- Profile selection (Senior / Child / Other) is implemented.
+- 6-scenario gameplay loop with left/straight/right choice and immediate feedback is implemented.
+- Variable end messages by score thresholds are implemented (`config.js`, `main.js`).
+- Final destination flow (arrival + parking + result screen) is implemented.
+- Tennessee-style roadside assets and subtle branding (billboard/final destination) are implemented.
+
+### Partially implemented / needs production hardening
+- Lead routing exists structurally but production integration is not complete:
+  - `CONFIG.leadCapture.enableSubmission` is `false`
+  - endpoint is placeholder (`YOUR_ZAPIER_HOOK`)
+  - no server-side validation/persistence documented.
+- reCAPTCHA currently uses Google test site key (good for dev, not production).
+
+### Remaining work from spec (still open)
+1. **Production lead pipeline**
+  - Connect real Zapier/Mailchimp endpoint.
+  - Switch to production reCAPTCHA keys.
+  - Add backend verification + error handling/reporting.
+
+2. ~~**Obstacle consequence variety**~~ DONE
+  - Implemented tree/bump/pothole consequence types with distinct visuals and animations.
+
+3. ~~**Intersection decision presentation polish**~~ DONE
+  - Green highway-style direction signs with arrows + answer text appear at each intersection.
+
+4. ~~**Branding journey moments expansion**~~ DONE
+  - 2 billboards + 1 JM roadside sign per road segment. Professional brown/gold sign with firm details.
+
+5. **Visual style verification pass against final stakeholder preference**
+  - Final approval pass needed for "animated but not childish" / Tennessee realism targets from `specs.md`.
+
+### Current highest-priority next tasks
+- Priority 1: Wire real lead capture flow (Zapier/Mailchimp + production reCAPTCHA).
+- Priority 2: Final visual polish pass with stakeholder feedback.
+- Priority 3: Mobile responsiveness testing and touch input optimization.
+

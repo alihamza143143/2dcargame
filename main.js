@@ -13,6 +13,7 @@ class GameController {
         this.answers = [];
         this.isTransitioning = false;
         this.pendingDirection = null;
+        this.pendingConsequence = null;
         
         // User data
         this.userData = {
@@ -313,6 +314,13 @@ class GameController {
         // Show UI
         this.elements.scenarioCard.classList.add('visible');
         this.elements.optionsContainer.classList.add('visible');
+        
+        // Create in-world direction signs at the intersection
+        gameRenderer.createDirectionSigns(
+            scenario.options[0].text,
+            scenario.options[1].text,
+            scenario.options[2].text
+        );
     }
     
     hideScenario() {
@@ -329,6 +337,7 @@ class GameController {
         
         // Store selected direction for when OK is clicked
         this.pendingDirection = direction;
+        this.pendingConsequence = option.consequence || 'pothole';
         
         // Record answer
         this.answers.push({
@@ -371,16 +380,33 @@ class GameController {
         const wasWrong = lastAnswer && !lastAnswer.isCorrect;
         
         if (wasWrong && this.pendingDirection) {
-            // Wrong answer → car hits a pothole, then turns
+            // Wrong answer — consequence depends on scenario type
             const dir = this.pendingDirection;
+            const consequence = this.pendingConsequence || 'pothole';
             this.pendingDirection = null;
-            gameRenderer.triggerBump(() => {
-                gameRenderer.turn(dir);
-            });
+            this.pendingConsequence = null;
+            
+            if (consequence === 'tree') {
+                // Tree fell across the road — car swerves around it
+                gameRenderer.triggerTreeHit(() => {
+                    gameRenderer.turn(dir);
+                });
+            } else if (consequence === 'bump') {
+                // Road debris — car swerves through it
+                gameRenderer.triggerSwerve(() => {
+                    gameRenderer.turn(dir);
+                });
+            } else {
+                // Pothole — car drops into pothole
+                gameRenderer.triggerBump(() => {
+                    gameRenderer.turn(dir);
+                });
+            }
         } else if (this.pendingDirection) {
             // Correct answer → smooth turn directly
             gameRenderer.turn(this.pendingDirection);
             this.pendingDirection = null;
+            this.pendingConsequence = null;
         }
     }
     
@@ -477,6 +503,7 @@ class GameController {
         this.answers = [];
         this.isTransitioning = false;
         this.pendingDirection = null;
+        this.pendingConsequence = null;
         
         // Reset renderer
         gameRenderer.reset();
