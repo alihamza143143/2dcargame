@@ -737,7 +737,7 @@ body {
 /* === PAUSE BUTTON & OVERLAY === */
 .pause-btn {
     position: fixed;
-    top: 15px;
+    top: 70px;
     right: 15px;
     z-index: 100;
     width: 44px;

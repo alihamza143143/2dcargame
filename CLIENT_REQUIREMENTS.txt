@@ -1,0 +1,22 @@
+ESTATE PLANNING GAME - PRODUCTION SETUP REQUIREMENTS
+
+To launch the game on your live website, please provide:
+
+1. Google reCAPTCHA Keys (create at google.com/recaptcha/admin)
+   - Site Key
+   - Secret Key
+   - Use reCAPTCHA v2 ("I'm not a robot" checkbox)
+
+2. Mailchimp/Lead Integration
+   - Mailchimp API Key + List ID, OR
+   - Zapier Webhook URL, OR
+   - Your preferred lead capture endpoint
+
+3. Final Live Domain
+   - Example: game.johnsonmcginnis.com
+   - (reCAPTCHA keys are domain-specific)
+
+4. Confirm the consultation link URL is correct:
+   - Currently set to: https://johnsonmcginnis.com/contact
+
+Once received, game goes live immediately.
