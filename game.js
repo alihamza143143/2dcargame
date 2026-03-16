@@ -165,7 +165,7 @@ class GameRenderer {
                     texture.magFilter = THREE.LinearFilter;
                     texture.premultiplyAlpha = false;
                     this.textures[key] = texture;
-                    console.log(`Loaded texture: ${key}`);
+                    // loaded
                     resolve();
                 }, undefined, (err) => {
                     console.warn(`Failed to load texture: ${path}`, err);
@@ -199,10 +199,20 @@ class GameRenderer {
         
             this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1500);
             
-            this.renderer = new THREE.WebGLRenderer({ antialias: true });
+            // Mobile detection + performance scaling
+            this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
+            const dpr = Math.min(window.devicePixelRatio || 1, this.isMobile ? 1.5 : 2);
+
+            this.renderer = new THREE.WebGLRenderer({
+                antialias: !this.isMobile,
+                powerPreference: 'high-performance',
+                alpha: false,
+                stencil: false
+            });
+            this.renderer.setPixelRatio(dpr);
             this.renderer.setSize(window.innerWidth, window.innerHeight);
-            this.renderer.shadowMap.enabled = true;
-            this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            this.renderer.shadowMap.enabled = !this.isMobile;
+            this.renderer.shadowMap.type = this.isMobile ? THREE.BasicShadowMap : THREE.PCFSoftShadowMap;
             // No tone mapping — preserves original vibrant colors without foggy/smoky wash
             this.renderer.toneMapping = THREE.NoToneMapping;
             this.renderer.toneMappingExposure = 1.0;
@@ -220,9 +230,15 @@ class GameRenderer {
             this.positionIntersectionAhead();
             
             this.updateCamera(true);
+            this.sceneReady = true;
+
+            // Hide loading screen
+            const ls = document.getElementById('loading-screen');
+            if (ls) { ls.classList.add('hidden'); setTimeout(() => ls.remove(), 600); }
+
             this.animate();
-            
-            window.addEventListener('resize', () => this.onResize());
+
+            window.addEventListener('resize', () => this.onResize(), { passive: true });
             
             // Pause game when tab is hidden to prevent time jumps
             document.addEventListener('visibilitychange', () => {
@@ -1515,6 +1531,7 @@ class GameRenderer {
     }
     
     positionIntersectionAhead() {
+        if (!this.car || !this.intersectionGroup) return;
         const dist = this.INTERSECTION_DISTANCE;
         const ix = this.car.position.x - Math.sin(this.car.rotation.y) * dist;
         const iz = this.car.position.z - Math.cos(this.car.rotation.y) * dist;
@@ -2650,6 +2667,7 @@ class GameRenderer {
     // === PUBLIC API ===
     
     startDriving() {
+        if (!this.sceneReady) return;
         this.setState('DRIVING');
         this.targetCarSpeed = 16;
     }
@@ -2793,6 +2811,7 @@ class GameRenderer {
     }
     
     showNextIntersection() {
+        if (!this.sceneReady) return;
         this.positionIntersectionAhead();
     }
     
@@ -3017,9 +3036,14 @@ class GameRenderer {
     }
     
     onResize() {
-        this.camera.aspect = window.innerWidth / window.innerHeight;
-        this.camera.updateProjectionMatrix();
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        if (this._rt) clearTimeout(this._rt);
+        this._rt = setTimeout(() => {
+            const dpr = Math.min(window.devicePixelRatio || 1, this.isMobile ? 1.5 : 2);
+            this.camera.aspect = window.innerWidth / window.innerHeight;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setPixelRatio(dpr);
+            this.renderer.setSize(window.innerWidth, window.innerHeight);
+        }, 150);
     }
 }
 
