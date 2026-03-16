@@ -266,10 +266,9 @@ class GameController {
         this.score = 0;
         this.answers = [];
 
-        this.showScreen('hud');
-        this.updateProgressDots();
-
         const launchGame = () => {
+            this.showScreen('hud');
+            this.updateProgressDots();
             gameRenderer.showNextIntersection();
             gameRenderer.onStopAtIntersection = () => {
                 this.showScenario();

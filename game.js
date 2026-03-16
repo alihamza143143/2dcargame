@@ -1025,9 +1025,9 @@ class GameRenderer {
             this.sceneryObjects.push(rightTree);
         }
         
-        // Fences along both sides - stop well before intersection junction
-        this.createFence(carX - roadSide - 6, carZ - 15, carZ - 45, 'left', fenceType);
-        this.createFence(carX + roadSide + 6, carZ - 15, carZ - 45, 'right', fenceType);
+        // Fences along both sides - short stretch, well before intersection
+        this.createFence(carX - roadSide - 6, carZ - 10, carZ - 30, 'left', fenceType);
+        this.createFence(carX + roadSide + 6, carZ - 10, carZ - 30, 'right', fenceType);
         
         // Single barn on configured side - CLOSER to road for visibility
         const barn = this.createBarn();
