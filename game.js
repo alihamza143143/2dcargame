@@ -231,6 +231,7 @@ class GameRenderer {
             this.positionIntersectionAhead();
             
             this.updateCamera(true);
+            this.sceneReady = true;
             this.animate();
             
             window.addEventListener('resize', () => this.onResize(), { passive: true });
@@ -1528,10 +1529,13 @@ class GameRenderer {
     }
     
     positionIntersectionAhead() {
+        // Guard: scene not ready yet (textures still loading)
+        if (!this.car || !this.intersectionGroup) return;
+
         const dist = this.INTERSECTION_DISTANCE;
         const ix = this.car.position.x - Math.sin(this.car.rotation.y) * dist;
         const iz = this.car.position.z - Math.cos(this.car.rotation.y) * dist;
-        
+
         this.intersectionGroup.position.set(ix, 0, iz);
         this.intersectionGroup.rotation.y = this.car.rotation.y;
         this.intersectionGroup.visible = true;
@@ -2665,6 +2669,7 @@ class GameRenderer {
     // === PUBLIC API ===
     
     startDriving() {
+        if (!this.sceneReady) return;
         this.setState('DRIVING');
         this.targetCarSpeed = 16;
     }
@@ -2808,6 +2813,7 @@ class GameRenderer {
     }
     
     showNextIntersection() {
+        if (!this.sceneReady) return;
         this.positionIntersectionAhead();
     }
     

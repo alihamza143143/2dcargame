@@ -265,25 +265,40 @@ class GameController {
         this.currentScenario = 0;
         this.score = 0;
         this.answers = [];
-        
+
         this.showScreen('hud');
         this.updateProgressDots();
-        
-        // Make sure intersection is positioned and visible
-        gameRenderer.showNextIntersection();
-        
-        // Set up callback for when car stops
-        gameRenderer.onStopAtIntersection = () => {
-            this.showScenario();
+
+        // Wait for 3D scene to be ready before starting gameplay
+        const launchGame = () => {
+            // Make sure intersection is positioned and visible
+            gameRenderer.showNextIntersection();
+
+            // Set up callback for when car stops
+            gameRenderer.onStopAtIntersection = () => {
+                this.showScenario();
+            };
+
+            // Start driving toward the visible intersection
+            gameRenderer.startDriving();
+
+            // After driving a bit, start approaching (slowing down)
+            setTimeout(() => {
+                gameRenderer.approachIntersection();
+            }, 1500);
         };
-        
-        // Start driving toward the visible intersection
-        gameRenderer.startDriving();
-        
-        // After driving a bit, start approaching (slowing down)
-        setTimeout(() => {
-            gameRenderer.approachIntersection();
-        }, 1500);
+
+        if (gameRenderer.sceneReady) {
+            launchGame();
+        } else {
+            // Scene still loading, poll until ready
+            const waitForScene = setInterval(() => {
+                if (gameRenderer.sceneReady) {
+                    clearInterval(waitForScene);
+                    launchGame();
+                }
+            }, 100);
+        }
     }
     
     updateProgressDots() {
