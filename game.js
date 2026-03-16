@@ -160,12 +160,12 @@ class GameRenderer {
         const promises = Object.entries(textureFiles).map(([key, path]) => {
             return new Promise((resolve) => {
                 loader.load(path, (texture) => {
-                    // Don't set colorSpace for transparent PNGs to preserve alpha
-                    texture.minFilter = THREE.LinearFilter;
+                    // Use mipmaps for better mobile performance (auto-downscale at distance)
+                    texture.minFilter = THREE.LinearMipmapLinearFilter;
                     texture.magFilter = THREE.LinearFilter;
+                    texture.generateMipmaps = true;
                     texture.premultiplyAlpha = false;
                     this.textures[key] = texture;
-                    console.log(`Loaded texture: ${key}`);
                     resolve();
                 }, undefined, (err) => {
                     console.warn(`Failed to load texture: ${path}`, err);
@@ -194,15 +194,26 @@ class GameRenderer {
             // Set scene background to match sky horizon color (prevents black)
             this.scene.background = new THREE.Color(0x87CEEB);
             
-            // Push fog very far back — only for blending distant objects, not for atmosphere
-            this.scene.fog = new THREE.Fog(0xA8D8EA, 600, 1200);
+            // Fog — closer on mobile for performance (fewer distant objects rendered)
+            this.scene.fog = new THREE.Fog(0xA8D8EA, this.isMobile ? 300 : 600, this.isMobile ? 700 : 1200);
         
             this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1500);
             
-            this.renderer = new THREE.WebGLRenderer({ antialias: true });
+            // Detect mobile/low-power devices for performance scaling
+            this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
+            const pixelRatio = Math.min(window.devicePixelRatio || 1, this.isMobile ? 1.5 : 2);
+
+            this.renderer = new THREE.WebGLRenderer({
+                antialias: !this.isMobile,
+                powerPreference: 'high-performance',
+                alpha: false,
+                stencil: false,
+                depth: true
+            });
+            this.renderer.setPixelRatio(pixelRatio);
             this.renderer.setSize(window.innerWidth, window.innerHeight);
-            this.renderer.shadowMap.enabled = true;
-            this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            this.renderer.shadowMap.enabled = !this.isMobile;
+            this.renderer.shadowMap.type = this.isMobile ? THREE.BasicShadowMap : THREE.PCFSoftShadowMap;
             // No tone mapping — preserves original vibrant colors without foggy/smoky wash
             this.renderer.toneMapping = THREE.NoToneMapping;
             this.renderer.toneMappingExposure = 1.0;
@@ -222,8 +233,8 @@ class GameRenderer {
             this.updateCamera(true);
             this.animate();
             
-            window.addEventListener('resize', () => this.onResize());
-            
+            window.addEventListener('resize', () => this.onResize(), { passive: true });
+
             // Pause game when tab is hidden to prevent time jumps
             document.addEventListener('visibilitychange', () => {
                 if (document.hidden) {
@@ -231,11 +242,11 @@ class GameRenderer {
                 } else {
                     this.resumeFromVisibility();
                 }
-            });
-            
+            }, { passive: true });
+
             // Also handle window blur/focus as fallback
-            window.addEventListener('blur', () => this.pauseForVisibility());
-            window.addEventListener('focus', () => this.resumeFromVisibility());
+            window.addEventListener('blur', () => this.pauseForVisibility(), { passive: true });
+            window.addEventListener('focus', () => this.resumeFromVisibility(), { passive: true });
         });
     }
     
@@ -252,8 +263,9 @@ class GameRenderer {
         const sun = new THREE.DirectionalLight(0xFFFAF0, 0.9);
         sun.position.set(60, 80, -80);
         sun.castShadow = true;
-        sun.shadow.mapSize.width = 2048;
-        sun.shadow.mapSize.height = 2048;
+        const shadowRes = this.isMobile ? 512 : 2048;
+        sun.shadow.mapSize.width = shadowRes;
+        sun.shadow.mapSize.height = shadowRes;
         sun.shadow.camera.near = 10;
         sun.shadow.camera.far = 500;
         sun.shadow.camera.left = -200;
@@ -304,7 +316,8 @@ class GameRenderer {
         ctx.globalAlpha = 1;
         
         const skyTexture = new THREE.CanvasTexture(canvas);
-        const skyGeo = new THREE.SphereGeometry(700, 32, 32);
+        const skySeg = this.isMobile ? 16 : 32;
+        const skyGeo = new THREE.SphereGeometry(700, skySeg, skySeg);
         const skyMat = new THREE.MeshBasicMaterial({
             map: skyTexture,
             side: THREE.BackSide
@@ -1839,16 +1852,18 @@ class GameRenderer {
     
     animate() {
         requestAnimationFrame(() => this.animate());
-        
-        // Skip updates when paused
+
+        // Skip updates when paused - render once then stop
         if (this.paused) {
-            // Still render once so the scene stays visible
-            if (this.renderer && this.scene && this.camera) {
+            if (!this._pauseRendered && this.renderer && this.scene && this.camera) {
                 this.renderer.render(this.scene, this.camera);
+                this._pauseRendered = true;
             }
+            this.clock.getDelta(); // drain clock so delta doesn't accumulate
             return;
         }
-        
+        this._pauseRendered = false;
+
         // Clamp delta to prevent time jumps (e.g. after tab switch)
         const delta = Math.min(this.clock.getDelta(), 0.1);
         this.update(delta);
@@ -3017,9 +3032,15 @@ class GameRenderer {
     }
     
     onResize() {
-        this.camera.aspect = window.innerWidth / window.innerHeight;
-        this.camera.updateProjectionMatrix();
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        if (this._resizeTimeout) clearTimeout(this._resizeTimeout);
+        this._resizeTimeout = setTimeout(() => {
+            this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
+            const pixelRatio = Math.min(window.devicePixelRatio || 1, this.isMobile ? 1.5 : 2);
+            this.camera.aspect = window.innerWidth / window.innerHeight;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setPixelRatio(pixelRatio);
+            this.renderer.setSize(window.innerWidth, window.innerHeight);
+        }, 150);
     }
 }
 
