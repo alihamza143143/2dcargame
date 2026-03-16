@@ -105,14 +105,15 @@ class GameRenderer {
         const treeStyle = 'green'; // Only assets2 trees
         const fenceType = Math.random() > 0.5 ? 'long' : 'short';
         
+        const mobile = this.isMobile;
         return {
             lakeSide: lakeSide,
             barnSide: barnSide,
             treeStyle: treeStyle, // Only assets2 trees
             fenceType: fenceType,
-            bushCount: 8 + Math.floor(Math.random() * 8), // 8-15 bushes
-            rockCount: 4 + Math.floor(Math.random() * 6), // 4-9 rocks
-            treeCount: 10 + Math.floor(Math.random() * 8), // 10-17 trees per side
+            bushCount: mobile ? 4 + Math.floor(Math.random() * 4) : 8 + Math.floor(Math.random() * 8),
+            rockCount: mobile ? 2 + Math.floor(Math.random() * 3) : 4 + Math.floor(Math.random() * 6),
+            treeCount: mobile ? 5 + Math.floor(Math.random() * 4) : 10 + Math.floor(Math.random() * 8),
         };
     }
     
@@ -183,25 +184,28 @@ class GameRenderer {
         this.container = document.createElement('div');
         this.container.id = 'game-canvas';
         document.body.insertBefore(this.container, document.body.firstChild);
-        
+
         this.scene = new THREE.Scene();
-        
+
+        // Mobile detection + performance scaling (detect early)
+        this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
+
         // Load PNG textures first, then build scene
         this.loadTextures().then(() => {
             // Create sky using canvas gradient
             this.createSkyGradient();
-            
+
             // Set scene background to match sky horizon color (prevents black)
             this.scene.background = new THREE.Color(0x87CEEB);
-            
+
             // Push fog very far back — only for blending distant objects, not for atmosphere
             this.scene.fog = new THREE.Fog(0xA8D8EA, 600, 1200);
-        
-            this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1500);
-            
-            // Mobile detection + performance scaling
-            this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
-            const dpr = Math.min(window.devicePixelRatio || 1, this.isMobile ? 1.5 : 2);
+
+            // Wider FOV on mobile so the view matches desktop (prevents zoomed-in look)
+            const fov = this.isMobile ? 72 : 60;
+            this.camera = new THREE.PerspectiveCamera(fov, window.innerWidth / window.innerHeight, 0.1, 1500);
+
+            const dpr = Math.min(window.devicePixelRatio || 1, this.isMobile ? 1 : 2);
 
             this.renderer = new THREE.WebGLRenderer({
                 antialias: !this.isMobile,
@@ -212,12 +216,14 @@ class GameRenderer {
             this.renderer.setPixelRatio(dpr);
             this.renderer.setSize(window.innerWidth, window.innerHeight);
             this.renderer.shadowMap.enabled = !this.isMobile;
-            this.renderer.shadowMap.type = this.isMobile ? THREE.BasicShadowMap : THREE.PCFSoftShadowMap;
+            if (!this.isMobile) {
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            }
             // No tone mapping — preserves original vibrant colors without foggy/smoky wash
             this.renderer.toneMapping = THREE.NoToneMapping;
             this.renderer.toneMappingExposure = 1.0;
             this.container.appendChild(this.renderer.domElement);
-            
+
             // Build scene
             this.setupLighting();
             this.createGround();
@@ -225,21 +231,20 @@ class GameRenderer {
             this.createInfiniteRoad();
             this.createIntersection();
             this.createCar();
-            
+
             // Position intersection ahead of car (this also creates initial scenery)
             this.positionIntersectionAhead();
-            
+
             this.updateCamera(true);
             this.sceneReady = true;
 
-            // Hide loading screen
-            const ls = document.getElementById('loading-screen');
-            if (ls) { ls.classList.add('hidden'); setTimeout(() => ls.remove(), 600); }
+            // Notify that scene is ready (loading screen handled by main.js)
+            if (this.onSceneReady) this.onSceneReady();
 
             this.animate();
 
             window.addEventListener('resize', () => this.onResize(), { passive: true });
-            
+
             // Pause game when tab is hidden to prevent time jumps
             document.addEventListener('visibilitychange', () => {
                 if (document.hidden) {
@@ -248,7 +253,7 @@ class GameRenderer {
                     this.resumeFromVisibility();
                 }
             });
-            
+
             // Also handle window blur/focus as fallback
             window.addEventListener('blur', () => this.pauseForVisibility());
             window.addEventListener('focus', () => this.resumeFromVisibility());
@@ -268,8 +273,8 @@ class GameRenderer {
         const sun = new THREE.DirectionalLight(0xFFFAF0, 0.9);
         sun.position.set(60, 80, -80);
         sun.castShadow = true;
-        sun.shadow.mapSize.width = 2048;
-        sun.shadow.mapSize.height = 2048;
+        sun.shadow.mapSize.width = this.isMobile ? 512 : 1024;
+        sun.shadow.mapSize.height = this.isMobile ? 512 : 1024;
         sun.shadow.camera.near = 10;
         sun.shadow.camera.far = 500;
         sun.shadow.camera.left = -200;
@@ -371,12 +376,12 @@ class GameRenderer {
     
     createHills() {
         this.hillGroup = new THREE.Group();
-        
+
         // Hills as a 360-degree panorama ring surrounding the entire scene.
         // Panels face inward so hills are visible from every direction.
         // hillGroup only TRANSLATES with the car (no rotation) so hills stay static.
         if (this.textures.hillsFar || this.textures.hillsMid || this.textures.hillsNear) {
-            const panelCount = 8;
+            const panelCount = this.isMobile ? 6 : 8;
             const angleStep = (Math.PI * 2) / panelCount;
             
             // Far hills — outermost ring
@@ -3038,7 +3043,9 @@ class GameRenderer {
     onResize() {
         if (this._rt) clearTimeout(this._rt);
         this._rt = setTimeout(() => {
-            const dpr = Math.min(window.devicePixelRatio || 1, this.isMobile ? 1.5 : 2);
+            this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
+            const dpr = Math.min(window.devicePixelRatio || 1, this.isMobile ? 1 : 2);
+            this.camera.fov = this.isMobile ? 72 : 60;
             this.camera.aspect = window.innerWidth / window.innerHeight;
             this.camera.updateProjectionMatrix();
             this.renderer.setPixelRatio(dpr);

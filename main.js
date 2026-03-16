@@ -129,14 +129,23 @@ class GameController {
     }
     
     initRenderer() {
-        // Initialize Three.js renderer
+        // Scene loads in background while user fills the form
+        gameRenderer.onSceneReady = () => {
+            this.sceneLoaded = true;
+            // If user already picked profile before scene loaded, start game now
+            if (this._pendingProfile) {
+                this._startGameInternal();
+            }
+        };
+
+        // Initialize Three.js renderer (loads textures + builds scene async)
         gameRenderer.init('game-container');
-        
+
         // Set up callbacks
         gameRenderer.onTurnComplete = () => {
             this.onTurnComplete();
         };
-        
+
         gameRenderer.onArrivalComplete = () => {
             this.showEndScreen();
         };
@@ -256,30 +265,47 @@ class GameController {
     
     handleProfileSelect(profile) {
         this.profile = profile;
+        if (this.sceneLoaded) {
+            this._startGameInternal();
+        } else {
+            // Scene still loading — show brief loading indicator, start when ready
+            this._pendingProfile = true;
+            this.showScreen('hud');
+            const ls = document.getElementById('loading-screen');
+            if (ls) { ls.style.display = 'flex'; ls.classList.remove('hidden'); }
+        }
+    }
+
+    // === GAMEPLAY ===
+
+    _startGameInternal() {
+        this._pendingProfile = false;
+        // Hide loading screen if visible
+        const ls = document.getElementById('loading-screen');
+        if (ls) { ls.classList.add('hidden'); setTimeout(() => ls.remove(), 500); }
+
         this.startGame();
     }
-    
-    // === GAMEPLAY ===
-    
+
     startGame() {
         this.currentScenario = 0;
         this.score = 0;
         this.answers = [];
-        
+
         this.showScreen('hud');
         this.updateProgressDots();
-        
+
         // Make sure intersection is positioned and visible
         gameRenderer.showNextIntersection();
-        
+
         // Set up callback for when car stops
         gameRenderer.onStopAtIntersection = () => {
             this.showScenario();
         };
-        
+
         // Start driving toward the visible intersection
         gameRenderer.startDriving();
-        
+
         // After driving a bit, start approaching (slowing down)
         setTimeout(() => {
             gameRenderer.approachIntersection();
