@@ -269,20 +269,12 @@ class GameController {
         this.showScreen('hud');
         this.updateProgressDots();
 
-        // Wait for 3D scene to be ready before starting gameplay
         const launchGame = () => {
-            // Make sure intersection is positioned and visible
             gameRenderer.showNextIntersection();
-
-            // Set up callback for when car stops
             gameRenderer.onStopAtIntersection = () => {
                 this.showScenario();
             };
-
-            // Start driving toward the visible intersection
             gameRenderer.startDriving();
-
-            // After driving a bit, start approaching (slowing down)
             setTimeout(() => {
                 gameRenderer.approachIntersection();
             }, 1500);
@@ -291,7 +283,6 @@ class GameController {
         if (gameRenderer.sceneReady) {
             launchGame();
         } else {
-            // Scene still loading, poll until ready
             const waitForScene = setInterval(() => {
                 if (gameRenderer.sceneReady) {
                     clearInterval(waitForScene);
@@ -436,8 +427,7 @@ class GameController {
             }, 500);
             this.isTransitioning = false;
         } else {
-            // Car is now driving on new road segment
-            // Show intersection immediately so roads are visible, start slowing later
+            // Show intersection immediately so it's always visible, slow down after a stretch
             gameRenderer.showNextIntersection();
             setTimeout(() => {
                 gameRenderer.approachIntersection();
@@ -566,30 +556,22 @@ class HomeAnimation {
         this.ctx = canvas.getContext('2d');
         this.animationId = null;
         this.isRunning = false;
-        this._resizeTimeout = null;
-
+        
         // Animation state
         this.time = 0;
         this.carX = 0;
         this.carProgress = 0;
-
+        
         // Setup
         this.resize();
-        window.addEventListener('resize', () => {
-            if (this._resizeTimeout) clearTimeout(this._resizeTimeout);
-            this._resizeTimeout = setTimeout(() => this.resize(), 150);
-        }, { passive: true });
+        window.addEventListener('resize', () => this.resize());
     }
-
+    
     resize() {
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        this.canvas.width = window.innerWidth * dpr;
-        this.canvas.height = window.innerHeight * dpr;
-        this.canvas.style.width = window.innerWidth + 'px';
-        this.canvas.style.height = window.innerHeight + 'px';
-        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        this.width = window.innerWidth;
-        this.height = window.innerHeight;
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+        this.width = this.canvas.width;
+        this.height = this.canvas.height;
     }
     
     start() {

@@ -160,12 +160,12 @@ class GameRenderer {
         const promises = Object.entries(textureFiles).map(([key, path]) => {
             return new Promise((resolve) => {
                 loader.load(path, (texture) => {
-                    // Use mipmaps for better mobile performance (auto-downscale at distance)
-                    texture.minFilter = THREE.LinearMipmapLinearFilter;
+                    // Don't set colorSpace for transparent PNGs to preserve alpha
+                    texture.minFilter = THREE.LinearFilter;
                     texture.magFilter = THREE.LinearFilter;
-                    texture.generateMipmaps = true;
                     texture.premultiplyAlpha = false;
                     this.textures[key] = texture;
+                    // texture loaded
                     resolve();
                 }, undefined, (err) => {
                     console.warn(`Failed to load texture: ${path}`, err);
@@ -194,22 +194,14 @@ class GameRenderer {
             // Set scene background to match sky horizon color (prevents black)
             this.scene.background = new THREE.Color(0x87CEEB);
             
-            // Fog — closer on mobile for performance (fewer distant objects rendered)
-            this.scene.fog = new THREE.Fog(0xA8D8EA, this.isMobile ? 300 : 600, this.isMobile ? 700 : 1200);
+            // Push fog very far back — only for blending distant objects, not for atmosphere
+            this.scene.fog = new THREE.Fog(0xA8D8EA, 600, 1200);
         
             this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1500);
             
-            // Detect mobile/low-power devices for performance scaling
             this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
             const pixelRatio = Math.min(window.devicePixelRatio || 1, this.isMobile ? 1.5 : 2);
-
-            this.renderer = new THREE.WebGLRenderer({
-                antialias: !this.isMobile,
-                powerPreference: 'high-performance',
-                alpha: false,
-                stencil: false,
-                depth: true
-            });
+            this.renderer = new THREE.WebGLRenderer({ antialias: !this.isMobile, powerPreference: 'high-performance', alpha: false, stencil: false });
             this.renderer.setPixelRatio(pixelRatio);
             this.renderer.setSize(window.innerWidth, window.innerHeight);
             this.renderer.shadowMap.enabled = !this.isMobile;
@@ -234,8 +226,8 @@ class GameRenderer {
             this.sceneReady = true;
             this.animate();
             
-            window.addEventListener('resize', () => this.onResize(), { passive: true });
-
+            window.addEventListener('resize', () => this.onResize());
+            
             // Pause game when tab is hidden to prevent time jumps
             document.addEventListener('visibilitychange', () => {
                 if (document.hidden) {
@@ -243,11 +235,11 @@ class GameRenderer {
                 } else {
                     this.resumeFromVisibility();
                 }
-            }, { passive: true });
-
+            });
+            
             // Also handle window blur/focus as fallback
-            window.addEventListener('blur', () => this.pauseForVisibility(), { passive: true });
-            window.addEventListener('focus', () => this.resumeFromVisibility(), { passive: true });
+            window.addEventListener('blur', () => this.pauseForVisibility());
+            window.addEventListener('focus', () => this.resumeFromVisibility());
         });
     }
     
@@ -264,9 +256,8 @@ class GameRenderer {
         const sun = new THREE.DirectionalLight(0xFFFAF0, 0.9);
         sun.position.set(60, 80, -80);
         sun.castShadow = true;
-        const shadowRes = this.isMobile ? 512 : 2048;
-        sun.shadow.mapSize.width = shadowRes;
-        sun.shadow.mapSize.height = shadowRes;
+        sun.shadow.mapSize.width = 2048;
+        sun.shadow.mapSize.height = 2048;
         sun.shadow.camera.near = 10;
         sun.shadow.camera.far = 500;
         sun.shadow.camera.left = -200;
@@ -317,8 +308,7 @@ class GameRenderer {
         ctx.globalAlpha = 1;
         
         const skyTexture = new THREE.CanvasTexture(canvas);
-        const skySeg = this.isMobile ? 16 : 32;
-        const skyGeo = new THREE.SphereGeometry(700, skySeg, skySeg);
+        const skyGeo = new THREE.SphereGeometry(700, 32, 32);
         const skyMat = new THREE.MeshBasicMaterial({
             map: skyTexture,
             side: THREE.BackSide
@@ -516,36 +506,30 @@ class GameRenderer {
         const roadLength = 600;
         const roadGeo = new THREE.PlaneGeometry(this.ROAD_WIDTH, roadLength);
         const road = new THREE.Mesh(roadGeo, roadMat);
-        // Use polygonOffset to prevent Z-fighting between road layers
-        roadMat.polygonOffset = true;
-        roadMat.polygonOffsetFactor = 2;
-        roadMat.polygonOffsetUnits = 2;
-
         road.rotation.x = -Math.PI / 2;
         road.position.set(0, 0.05, 0);
         road.receiveShadow = true;
         this.roadGroup.add(road);
-
-        // Center yellow dashed line
-        lineMat.depthTest = true;
+        
+        // Center yellow dashed line - raised higher
         for (let z = roadLength / 2; z > -roadLength / 2; z -= 10) {
             const dashGeo = new THREE.PlaneGeometry(0.25, 5);
             const dash = new THREE.Mesh(dashGeo, lineMat);
             dash.rotation.x = -Math.PI / 2;
-            dash.position.set(0, 0.12, z);
+            dash.position.set(0, 0.08, z);
             this.roadGroup.add(dash);
         }
-
-        // White edge lines
+        
+        // White edge lines - raised higher
         const edgeGeo = new THREE.PlaneGeometry(0.3, roadLength);
         const leftEdge = new THREE.Mesh(edgeGeo, edgeMat);
         leftEdge.rotation.x = -Math.PI / 2;
-        leftEdge.position.set(-this.ROAD_WIDTH / 2 + 0.2, 0.12, 0);
+        leftEdge.position.set(-this.ROAD_WIDTH / 2 + 0.2, 0.08, 0);
         this.roadGroup.add(leftEdge);
-
+        
         const rightEdge = new THREE.Mesh(edgeGeo, edgeMat);
         rightEdge.rotation.x = -Math.PI / 2;
-        rightEdge.position.set(this.ROAD_WIDTH / 2 - 0.2, 0.12, 0);
+        rightEdge.position.set(this.ROAD_WIDTH / 2 - 0.2, 0.08, 0);
         this.roadGroup.add(rightEdge);
         
         this.scene.add(this.roadGroup);
@@ -583,56 +567,51 @@ class GameRenderer {
         const edgeMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
         
         // === INTERSECTION CENTER (crossroads) ===
-        // Use polygonOffset on intersection road material to prevent Z-fighting
-        roadMat.polygonOffset = true;
-        roadMat.polygonOffsetFactor = 2;
-        roadMat.polygonOffsetUnits = 2;
-
         const junctionSize = this.ROAD_WIDTH * 2.5;
         const junctionGeo = new THREE.PlaneGeometry(junctionSize, junctionSize);
         const junction = new THREE.Mesh(junctionGeo, roadMat);
         junction.rotation.x = -Math.PI / 2;
-        junction.position.set(0, 0.08, 0);
+        junction.position.set(0, 0.06, 0);
         junction.receiveShadow = true;
         this.intersectionGroup.add(junction);
-
+        
         // === CONNECTED ROADS WITH MARKINGS ===
-        const sideRoadLength = 160;
+        const sideRoadLength = 200;
         const junctionEdge = junctionSize / 2;
-
+        
         // LEFT ROAD
         const leftRoadGeo = new THREE.PlaneGeometry(this.ROAD_WIDTH, sideRoadLength);
         const leftRoad = new THREE.Mesh(leftRoadGeo, roadMat);
         leftRoad.rotation.x = -Math.PI / 2;
         leftRoad.rotation.z = Math.PI / 2;
-        leftRoad.position.set(-junctionEdge - sideRoadLength / 2, 0.07, 0);
+        leftRoad.position.set(-junctionEdge - sideRoadLength / 2, 0.04, 0);
         leftRoad.receiveShadow = true;
         this.intersectionGroup.add(leftRoad);
-
+        
         // Left road markings - yellow center dashes
         for (let x = -junctionEdge - 15; x > -junctionEdge - sideRoadLength; x -= 10) {
             const dashGeo = new THREE.PlaneGeometry(5, 0.25);
             const dash = new THREE.Mesh(dashGeo, lineMat);
             dash.rotation.x = -Math.PI / 2;
-            dash.position.set(x, 0.14, 0);
+            dash.position.set(x, 0.08, 0);
             this.intersectionGroup.add(dash);
         }
         // Left road white edges
         const leftEdgeGeo = new THREE.PlaneGeometry(sideRoadLength, 0.3);
         const leftEdgeTop = new THREE.Mesh(leftEdgeGeo, edgeMat);
         leftEdgeTop.rotation.x = -Math.PI / 2;
-        leftEdgeTop.position.set(-junctionEdge - sideRoadLength / 2, 0.14, -this.ROAD_WIDTH / 2 + 0.2);
+        leftEdgeTop.position.set(-junctionEdge - sideRoadLength / 2, 0.08, -this.ROAD_WIDTH / 2 + 0.2);
         this.intersectionGroup.add(leftEdgeTop);
         const leftEdgeBottom = new THREE.Mesh(leftEdgeGeo, edgeMat);
         leftEdgeBottom.rotation.x = -Math.PI / 2;
-        leftEdgeBottom.position.set(-junctionEdge - sideRoadLength / 2, 0.14, this.ROAD_WIDTH / 2 - 0.2);
+        leftEdgeBottom.position.set(-junctionEdge - sideRoadLength / 2, 0.08, this.ROAD_WIDTH / 2 - 0.2);
         this.intersectionGroup.add(leftEdgeBottom);
-
+        
         // RIGHT ROAD
         const rightRoad = new THREE.Mesh(leftRoadGeo, roadMat);
         rightRoad.rotation.x = -Math.PI / 2;
         rightRoad.rotation.z = Math.PI / 2;
-        rightRoad.position.set(junctionEdge + sideRoadLength / 2, 0.07, 0);
+        rightRoad.position.set(junctionEdge + sideRoadLength / 2, 0.04, 0);
         rightRoad.receiveShadow = true;
         this.intersectionGroup.add(rightRoad);
         
@@ -641,69 +620,69 @@ class GameRenderer {
             const dashGeo = new THREE.PlaneGeometry(5, 0.25);
             const dash = new THREE.Mesh(dashGeo, lineMat);
             dash.rotation.x = -Math.PI / 2;
-            dash.position.set(x, 0.14, 0);
+            dash.position.set(x, 0.08, 0);
             this.intersectionGroup.add(dash);
         }
         // Right road white edges
         const rightEdgeTop = new THREE.Mesh(leftEdgeGeo, edgeMat);
         rightEdgeTop.rotation.x = -Math.PI / 2;
-        rightEdgeTop.position.set(junctionEdge + sideRoadLength / 2, 0.14, -this.ROAD_WIDTH / 2 + 0.2);
+        rightEdgeTop.position.set(junctionEdge + sideRoadLength / 2, 0.08, -this.ROAD_WIDTH / 2 + 0.2);
         this.intersectionGroup.add(rightEdgeTop);
         const rightEdgeBottom = new THREE.Mesh(leftEdgeGeo, edgeMat);
         rightEdgeBottom.rotation.x = -Math.PI / 2;
-        rightEdgeBottom.position.set(junctionEdge + sideRoadLength / 2, 0.14, this.ROAD_WIDTH / 2 - 0.2);
+        rightEdgeBottom.position.set(junctionEdge + sideRoadLength / 2, 0.08, this.ROAD_WIDTH / 2 - 0.2);
         this.intersectionGroup.add(rightEdgeBottom);
-
+        
         // STRAIGHT ROAD (ahead)
         const straightRoadGeo = new THREE.PlaneGeometry(this.ROAD_WIDTH, sideRoadLength);
         const straightRoad = new THREE.Mesh(straightRoadGeo, roadMat);
         straightRoad.rotation.x = -Math.PI / 2;
-        straightRoad.position.set(0, 0.07, -junctionEdge - sideRoadLength / 2);
+        straightRoad.position.set(0, 0.04, -junctionEdge - sideRoadLength / 2);
         straightRoad.receiveShadow = true;
         this.intersectionGroup.add(straightRoad);
-
+        
         // Straight road markings - yellow center dashes
         for (let z = -junctionEdge - 15; z > -junctionEdge - sideRoadLength; z -= 10) {
             const dashGeo = new THREE.PlaneGeometry(0.25, 5);
             const dash = new THREE.Mesh(dashGeo, lineMat);
             dash.rotation.x = -Math.PI / 2;
-            dash.position.set(0, 0.14, z);
+            dash.position.set(0, 0.08, z);
             this.intersectionGroup.add(dash);
         }
         // Straight road white edges
         const straightEdgeGeo = new THREE.PlaneGeometry(0.3, sideRoadLength);
         const straightEdgeLeft = new THREE.Mesh(straightEdgeGeo, edgeMat);
         straightEdgeLeft.rotation.x = -Math.PI / 2;
-        straightEdgeLeft.position.set(-this.ROAD_WIDTH / 2 + 0.2, 0.14, -junctionEdge - sideRoadLength / 2);
+        straightEdgeLeft.position.set(-this.ROAD_WIDTH / 2 + 0.2, 0.08, -junctionEdge - sideRoadLength / 2);
         this.intersectionGroup.add(straightEdgeLeft);
         const straightEdgeRight = new THREE.Mesh(straightEdgeGeo, edgeMat);
         straightEdgeRight.rotation.x = -Math.PI / 2;
-        straightEdgeRight.position.set(this.ROAD_WIDTH / 2 - 0.2, 0.14, -junctionEdge - sideRoadLength / 2);
+        straightEdgeRight.position.set(this.ROAD_WIDTH / 2 - 0.2, 0.08, -junctionEdge - sideRoadLength / 2);
         this.intersectionGroup.add(straightEdgeRight);
-
+        
         // BACK ROAD (where car comes from)
         const backRoad = new THREE.Mesh(straightRoadGeo, roadMat);
         backRoad.rotation.x = -Math.PI / 2;
-        backRoad.position.set(0, 0.07, junctionEdge + sideRoadLength / 2);
+        backRoad.position.set(0, 0.04, junctionEdge + sideRoadLength / 2);
         backRoad.receiveShadow = true;
         this.intersectionGroup.add(backRoad);
-
+        
         // Back road markings - yellow center dashes
         for (let z = junctionEdge + 15; z < junctionEdge + sideRoadLength; z += 10) {
             const dashGeo = new THREE.PlaneGeometry(0.25, 5);
             const dash = new THREE.Mesh(dashGeo, lineMat);
             dash.rotation.x = -Math.PI / 2;
-            dash.position.set(0, 0.14, z);
+            dash.position.set(0, 0.08, z);
             this.intersectionGroup.add(dash);
         }
         // Back road white edges
         const backEdgeLeft = new THREE.Mesh(straightEdgeGeo, edgeMat);
         backEdgeLeft.rotation.x = -Math.PI / 2;
-        backEdgeLeft.position.set(-this.ROAD_WIDTH / 2 + 0.2, 0.14, junctionEdge + sideRoadLength / 2);
+        backEdgeLeft.position.set(-this.ROAD_WIDTH / 2 + 0.2, 0.08, junctionEdge + sideRoadLength / 2);
         this.intersectionGroup.add(backEdgeLeft);
         const backEdgeRight = new THREE.Mesh(straightEdgeGeo, edgeMat);
         backEdgeRight.rotation.x = -Math.PI / 2;
-        backEdgeRight.position.set(this.ROAD_WIDTH / 2 - 0.2, 0.14, junctionEdge + sideRoadLength / 2);
+        backEdgeRight.position.set(this.ROAD_WIDTH / 2 - 0.2, 0.08, junctionEdge + sideRoadLength / 2);
         this.intersectionGroup.add(backEdgeRight);
         
         // === ADD SCENERY TO INTERSECTION ROADS ===
@@ -734,7 +713,7 @@ class GameRenderer {
         
         // === LEFT ROAD SCENERY ===
         // Trees along left road - far from road, START FAR from junction
-        for (let x = -junctionEdge - 40; x > -120; x -= 18) {
+        for (let x = -junctionEdge - 50; x > -140; x -= 18) {
             const tree1 = this.createTree();
             tree1.position.set(x, 0, -roadSide - 10 - Math.random() * 8);
             this.intersectionGroup.add(tree1);
@@ -743,13 +722,13 @@ class GameRenderer {
             tree2.position.set(x - 5, 0, roadSide + 10 + Math.random() * 8);
             this.intersectionGroup.add(tree2);
         }
-        // Fences along left road
-        this.createIntersectionFence(-junctionEdge - 30, -120, -roadSide - 6, 'horizontal');
-        this.createIntersectionFence(-junctionEdge - 30, -120, roadSide + 6, 'horizontal');
+        // Fences along left road - start well after the junction cross-road opening
+        this.createIntersectionFence(-junctionEdge - 40, -150, -roadSide - 6, 'horizontal');
+        this.createIntersectionFence(-junctionEdge - 40, -150, roadSide + 6, 'horizontal');
         
         // === RIGHT ROAD SCENERY ===
-        // Trees along right road
-        for (let x = junctionEdge + 40; x < 120; x += 18) {
+        // Trees along right road - far from road, START FAR from junction
+        for (let x = junctionEdge + 50; x < 140; x += 18) {
             const tree1 = this.createTree();
             tree1.position.set(x, 0, -roadSide - 10 - Math.random() * 8);
             this.intersectionGroup.add(tree1);
@@ -758,13 +737,13 @@ class GameRenderer {
             tree2.position.set(x + 5, 0, roadSide + 10 + Math.random() * 8);
             this.intersectionGroup.add(tree2);
         }
-        // Fences along right road
-        this.createIntersectionFence(junctionEdge + 30, 120, -roadSide - 6, 'horizontal');
-        this.createIntersectionFence(junctionEdge + 30, 120, roadSide + 6, 'horizontal');
+        // Fences along right road - start well after the junction cross-road opening
+        this.createIntersectionFence(junctionEdge + 40, 150, -roadSide - 6, 'horizontal');
+        this.createIntersectionFence(junctionEdge + 40, 150, roadSide + 6, 'horizontal');
         
         // === STRAIGHT ROAD SCENERY ===
-        // Trees along straight road
-        for (let z = -junctionEdge - 40; z > -120; z -= 18) {
+        // Trees along straight road - far from road, START FAR from junction
+        for (let z = -junctionEdge - 50; z > -140; z -= 18) {
             const tree1 = this.createTree();
             tree1.position.set(-roadSide - 10 - Math.random() * 8, 0, z);
             this.intersectionGroup.add(tree1);
@@ -773,17 +752,19 @@ class GameRenderer {
             tree2.position.set(roadSide + 10 + Math.random() * 8, 0, z - 5);
             this.intersectionGroup.add(tree2);
         }
-        // Fences along straight road
-        this.createIntersectionFence(-junctionEdge - 30, -120, -roadSide - 6, 'vertical-left');
-        this.createIntersectionFence(-junctionEdge - 30, -120, roadSide + 6, 'vertical-right');
-
-        // === BACK ROAD FENCES (where car comes from)
-        this.createIntersectionFence(junctionEdge + 40, 120, -roadSide - 6, 'vertical-left');
-        this.createIntersectionFence(junctionEdge + 40, 120, roadSide + 6, 'vertical-right');
+        // Fences along straight road - start well after the junction cross-road opening
+        this.createIntersectionFence(-junctionEdge - 40, -150, -roadSide - 6, 'vertical-left');
+        this.createIntersectionFence(-junctionEdge - 40, -150, roadSide + 6, 'vertical-right');
+        
+        // === BACK ROAD FENCES (where car comes from) - only beyond the junction edge ===
+        // These run along Z axis from junctionEdge outward, on both sides of the back road
+        // They do NOT extend into the junction area, so left/right cross-roads stay open
+        this.createIntersectionFence(junctionEdge + 40, 80, -roadSide - 6, 'vertical-left');
+        this.createIntersectionFence(junctionEdge + 40, 80, roadSide + 6, 'vertical-right');
         
         // === BARNS near intersection - one barn far from road, removed rotation since PlaneGeometry needs to face camera ===
         const barn1 = this.createBarn();
-        barn1.position.set(-65, 0, -45);
+        barn1.position.set(-70, 0, -50);
         // No rotation for barn - let it face default direction for now
         this.intersectionGroup.add(barn1);
     }
@@ -1033,8 +1014,8 @@ class GameRenderer {
         const fenceType = config ? config.fenceType : 'long';
         const barnSide = config ? config.barnSide : 'left';
         
-        // Trees along both sides - ahead AND behind car for full coverage
-        for (let z = carZ + 30; z > carZ - 75; z -= 14) {
+        // Trees along both sides - FAR from road, only AHEAD of car (not behind)
+        for (let z = carZ - 10; z > carZ - 70; z -= 20) {
             // Left side trees - far from road
             const leftTree = this.createTree(treeStyle);
             leftTree.position.set(carX - roadSide - 14 - Math.random() * 6, 0, z + Math.random() * 3);
@@ -1048,10 +1029,9 @@ class GameRenderer {
             this.sceneryObjects.push(rightTree);
         }
         
-        // Fences along both sides - behind car, stopping well before intersection junction
-        // Intersection is ~80 units ahead, junction opening starts at ~70 units ahead
-        this.createFence(carX - roadSide - 6, carZ + 25, carZ - 50, 'left', fenceType);
-        this.createFence(carX + roadSide + 6, carZ + 25, carZ - 50, 'right', fenceType);
+        // Fences along both sides - STOP before intersection so cross-road openings are clear
+        this.createFence(carX - roadSide - 6, carZ - 25, carZ - 55, 'left', fenceType);
+        this.createFence(carX + roadSide + 6, carZ - 25, carZ - 55, 'right', fenceType);
         
         // Single barn on configured side - CLOSER to road for visibility
         const barn = this.createBarn();
@@ -1085,40 +1065,40 @@ class GameRenderer {
         this.scene.add(jmSign);
         this.sceneryObjects.push(jmSign);
         
-        // Additional scattered trees in fields - both ahead and behind car
+        // Additional scattered trees in fields - MINIMUM 40 from road center, only AHEAD
         for (let i = 0; i < treeCount; i++) {
             const tree = this.createTree(treeStyle);
             const side = Math.random() > 0.5 ? -1 : 1;
             tree.position.set(
                 carX + side * (34 + Math.random() * 24),
                 0,
-                carZ + 20 - Math.random() * 90 // Behind and ahead of car
+                carZ - 10 - Math.random() * 60 // Only ahead of car
             );
             this.scene.add(tree);
             this.sceneryObjects.push(tree);
         }
         
-        // Add bushes/shrubs - both ahead and behind car
+        // Add bushes/shrubs - MINIMUM 30 from road center, only AHEAD
         for (let i = 0; i < bushCount; i++) {
             const bush = this.createBush();
             const side = Math.random() > 0.5 ? -1 : 1;
             bush.position.set(
                 carX + side * (26 + Math.random() * 20),
                 0,
-                carZ + 15 - Math.random() * 70 // Behind and ahead
+                carZ - 5 - Math.random() * 55 // Only ahead
             );
             this.scene.add(bush);
             this.sceneryObjects.push(bush);
         }
         
-        // Add rocks scattered around - both ahead and behind car
+        // Add rocks scattered around - MINIMUM 25 from road center, only AHEAD
         for (let i = 0; i < rockCount; i++) {
             const rock = this.createRock();
             const side = Math.random() > 0.5 ? -1 : 1;
             rock.position.set(
                 carX + side * (22 + Math.random() * 24),
                 0,
-                carZ + 15 - Math.random() * 75 // Behind and ahead
+                carZ - 5 - Math.random() * 60 // Only ahead
             );
             this.scene.add(rock);
             this.sceneryObjects.push(rock);
@@ -1539,13 +1519,11 @@ class GameRenderer {
     }
     
     positionIntersectionAhead() {
-        // Guard: scene not ready yet (textures still loading)
         if (!this.car || !this.intersectionGroup) return;
-
         const dist = this.INTERSECTION_DISTANCE;
         const ix = this.car.position.x - Math.sin(this.car.rotation.y) * dist;
         const iz = this.car.position.z - Math.cos(this.car.rotation.y) * dist;
-
+        
         this.intersectionGroup.position.set(ix, 0, iz);
         this.intersectionGroup.rotation.y = this.car.rotation.y;
         this.intersectionGroup.visible = true;
@@ -1566,7 +1544,7 @@ class GameRenderer {
             this.hillGroup.position.set(this.car.position.x, 0, this.car.position.z);
         }
         if (this.ground) {
-            this.ground.position.set(this.car.position.x, -0.1, this.car.position.z);
+            this.ground.position.set(this.car.position.x, -1.1, this.car.position.z);
         }
         
         // Only create scenery if not already created for this road segment
@@ -1619,9 +1597,9 @@ class GameRenderer {
             const objects = this.createSceneryForDirection(endX, endZ, endRot, this.pregenScenery[direction].config);
             this.pregenScenery[direction].objects = objects;
             
-            // Make ALL pre-generated scenery VISIBLE immediately — no pop-in
+            // Hide pre-generated scenery until direction is chosen
             objects.forEach(obj => {
-                obj.visible = true;
+                obj.visible = false;
                 this.scene.add(obj);
             });
         });
@@ -1632,8 +1610,9 @@ class GameRenderer {
         const roadSide = this.ROAD_WIDTH / 2 + 8;
         const treeStyle = config.treeStyle;
         
-        // Trees along both sides - cover behind (-20) through ahead (110) of car exit point
-        for (let dist = -20; dist < 110; dist += 12) {
+        // Trees along both sides - CLOSE to road like the first scene (~12-20 from road edge)
+        // Start at 30 to clear the intersection area
+        for (let dist = 30; dist < 100; dist += 12) {
             const baseX = carX - Math.sin(carRot) * dist;
             const baseZ = carZ - Math.cos(carRot) * dist;
             
@@ -1777,8 +1756,8 @@ class GameRenderer {
             const spacing = fenceType === 'long' ? 15 : 10;
             const fenceWidth = fenceType === 'long' ? 15 : 10;
             
-            // Place fences on both sides — cover behind and ahead for seamless view
-            for (let dist = -15; dist < 120; dist += spacing) {
+            // Place fences on both sides along the road — start past intersection area
+            for (let dist = 40; dist < 120; dist += spacing) {
                 const baseX = carX - Math.sin(carRot) * dist;
                 const baseZ = carZ - Math.cos(carRot) * dist;
                 
@@ -1865,18 +1844,16 @@ class GameRenderer {
     
     animate() {
         requestAnimationFrame(() => this.animate());
-
-        // Skip updates when paused - render once then stop
+        
+        // Skip updates when paused
         if (this.paused) {
-            if (!this._pauseRendered && this.renderer && this.scene && this.camera) {
+            // Still render once so the scene stays visible
+            if (this.renderer && this.scene && this.camera) {
                 this.renderer.render(this.scene, this.camera);
-                this._pauseRendered = true;
             }
-            this.clock.getDelta(); // drain clock so delta doesn't accumulate
             return;
         }
-        this._pauseRendered = false;
-
+        
         // Clamp delta to prevent time jumps (e.g. after tab switch)
         const delta = Math.min(this.clock.getDelta(), 0.1);
         this.update(delta);
@@ -2793,7 +2770,7 @@ class GameRenderer {
         this.setState('POST_TURN_DRIVING');
         this.targetCarSpeed = 16;
         
-        // Reset pregen flag — need new pregens for next intersection's 3 directions
+        // Reset pregen flag for next intersection (need to pregenerate for new directions)
         this.pregenSceneryCreated = false;
         
         // Reposition road AHEAD of car using car's forward direction
@@ -2805,7 +2782,7 @@ class GameRenderer {
         
         // Update ground and hills immediately
         if (this.ground) {
-            this.ground.position.set(this.car.position.x, -0.1, this.car.position.z);
+            this.ground.position.set(this.car.position.x, -1.1, this.car.position.z);
         }
         if (this.hillGroup) {
             // 360° panorama ring: center on car, NO rotation
@@ -3049,7 +3026,6 @@ class GameRenderer {
     onResize() {
         if (this._resizeTimeout) clearTimeout(this._resizeTimeout);
         this._resizeTimeout = setTimeout(() => {
-            this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
             const pixelRatio = Math.min(window.devicePixelRatio || 1, this.isMobile ? 1.5 : 2);
             this.camera.aspect = window.innerWidth / window.innerHeight;
             this.camera.updateProjectionMatrix();
