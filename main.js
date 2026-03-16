@@ -437,11 +437,11 @@ class GameController {
             this.isTransitioning = false;
         } else {
             // Car is now driving on new road segment
-            // Show next intersection ahead after a comfortable driving stretch
+            // Show intersection immediately so roads are visible, start slowing later
+            gameRenderer.showNextIntersection();
             setTimeout(() => {
-                gameRenderer.showNextIntersection();
                 gameRenderer.approachIntersection();
-            }, 3500);
+            }, 2000);
             // onStopAtIntersection callback will show the scenario
             this.isTransitioning = false;
         }

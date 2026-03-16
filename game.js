@@ -597,7 +597,7 @@ class GameRenderer {
         this.intersectionGroup.add(junction);
 
         // === CONNECTED ROADS WITH MARKINGS ===
-        const sideRoadLength = 200;
+        const sideRoadLength = 90;
         const junctionEdge = junctionSize / 2;
 
         // LEFT ROAD
@@ -734,7 +734,7 @@ class GameRenderer {
         
         // === LEFT ROAD SCENERY ===
         // Trees along left road - far from road, START FAR from junction
-        for (let x = -junctionEdge - 50; x > -140; x -= 18) {
+        for (let x = -junctionEdge - 40; x > -90; x -= 18) {
             const tree1 = this.createTree();
             tree1.position.set(x, 0, -roadSide - 10 - Math.random() * 8);
             this.intersectionGroup.add(tree1);
@@ -743,13 +743,13 @@ class GameRenderer {
             tree2.position.set(x - 5, 0, roadSide + 10 + Math.random() * 8);
             this.intersectionGroup.add(tree2);
         }
-        // Fences along left road - start well after the junction cross-road opening
-        this.createIntersectionFence(-junctionEdge - 40, -150, -roadSide - 6, 'horizontal');
-        this.createIntersectionFence(-junctionEdge - 40, -150, roadSide + 6, 'horizontal');
+        // Fences along left road
+        this.createIntersectionFence(-junctionEdge - 30, -85, -roadSide - 6, 'horizontal');
+        this.createIntersectionFence(-junctionEdge - 30, -85, roadSide + 6, 'horizontal');
         
         // === RIGHT ROAD SCENERY ===
-        // Trees along right road - far from road, START FAR from junction
-        for (let x = junctionEdge + 50; x < 140; x += 18) {
+        // Trees along right road
+        for (let x = junctionEdge + 40; x < 90; x += 18) {
             const tree1 = this.createTree();
             tree1.position.set(x, 0, -roadSide - 10 - Math.random() * 8);
             this.intersectionGroup.add(tree1);
@@ -758,13 +758,13 @@ class GameRenderer {
             tree2.position.set(x + 5, 0, roadSide + 10 + Math.random() * 8);
             this.intersectionGroup.add(tree2);
         }
-        // Fences along right road - start well after the junction cross-road opening
-        this.createIntersectionFence(junctionEdge + 40, 150, -roadSide - 6, 'horizontal');
-        this.createIntersectionFence(junctionEdge + 40, 150, roadSide + 6, 'horizontal');
+        // Fences along right road
+        this.createIntersectionFence(junctionEdge + 30, 85, -roadSide - 6, 'horizontal');
+        this.createIntersectionFence(junctionEdge + 30, 85, roadSide + 6, 'horizontal');
         
         // === STRAIGHT ROAD SCENERY ===
-        // Trees along straight road - far from road, START FAR from junction
-        for (let z = -junctionEdge - 50; z > -140; z -= 18) {
+        // Trees along straight road
+        for (let z = -junctionEdge - 40; z > -90; z -= 18) {
             const tree1 = this.createTree();
             tree1.position.set(-roadSide - 10 - Math.random() * 8, 0, z);
             this.intersectionGroup.add(tree1);
@@ -773,18 +773,17 @@ class GameRenderer {
             tree2.position.set(roadSide + 10 + Math.random() * 8, 0, z - 5);
             this.intersectionGroup.add(tree2);
         }
-        // Fences along straight road - start well after the junction cross-road opening
-        this.createIntersectionFence(-junctionEdge - 40, -150, -roadSide - 6, 'vertical-left');
-        this.createIntersectionFence(-junctionEdge - 40, -150, roadSide + 6, 'vertical-right');
+        // Fences along straight road
+        this.createIntersectionFence(-junctionEdge - 30, -85, -roadSide - 6, 'vertical-left');
+        this.createIntersectionFence(-junctionEdge - 30, -85, roadSide + 6, 'vertical-right');
         
-        // === BACK ROAD FENCES (where car comes from) - start far from junction to clear cross-roads
-        // These run along Z axis from well past the junction outward
-        this.createIntersectionFence(junctionEdge + 50, 120, -roadSide - 6, 'vertical-left');
-        this.createIntersectionFence(junctionEdge + 50, 120, roadSide + 6, 'vertical-right');
+        // === BACK ROAD FENCES (where car comes from)
+        this.createIntersectionFence(junctionEdge + 40, 85, -roadSide - 6, 'vertical-left');
+        this.createIntersectionFence(junctionEdge + 40, 85, roadSide + 6, 'vertical-right');
         
         // === BARNS near intersection - one barn far from road, removed rotation since PlaneGeometry needs to face camera ===
         const barn1 = this.createBarn();
-        barn1.position.set(-70, 0, -50);
+        barn1.position.set(-55, 0, -40);
         // No rotation for barn - let it face default direction for now
         this.intersectionGroup.add(barn1);
     }
