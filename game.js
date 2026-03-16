@@ -756,12 +756,8 @@ class GameRenderer {
         this.createIntersectionFence(-junctionEdge - 40, -150, -roadSide - 6, 'vertical-left');
         this.createIntersectionFence(-junctionEdge - 40, -150, roadSide + 6, 'vertical-right');
         
-        // === BACK ROAD FENCES (where car comes from) - only beyond the junction edge ===
-        // These run along Z axis from junctionEdge outward, on both sides of the back road
-        // They do NOT extend into the junction area, so left/right cross-roads stay open
-        this.createIntersectionFence(junctionEdge + 40, 80, -roadSide - 6, 'vertical-left');
-        this.createIntersectionFence(junctionEdge + 40, 80, roadSide + 6, 'vertical-right');
-        
+        // No back road fences — keeps the junction area clean and cross-roads visible
+
         // === BARNS near intersection - one barn far from road, removed rotation since PlaneGeometry needs to face camera ===
         const barn1 = this.createBarn();
         barn1.position.set(-70, 0, -50);
@@ -1029,9 +1025,9 @@ class GameRenderer {
             this.sceneryObjects.push(rightTree);
         }
         
-        // Fences along both sides - STOP before intersection so cross-road openings are clear
-        this.createFence(carX - roadSide - 6, carZ - 25, carZ - 55, 'left', fenceType);
-        this.createFence(carX + roadSide + 6, carZ - 25, carZ - 55, 'right', fenceType);
+        // Fences along both sides - stop well before intersection junction
+        this.createFence(carX - roadSide - 6, carZ - 15, carZ - 45, 'left', fenceType);
+        this.createFence(carX + roadSide + 6, carZ - 15, carZ - 45, 'right', fenceType);
         
         // Single barn on configured side - CLOSER to road for visibility
         const barn = this.createBarn();
