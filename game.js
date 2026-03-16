@@ -1034,8 +1034,8 @@ class GameRenderer {
         const fenceType = config ? config.fenceType : 'long';
         const barnSide = config ? config.barnSide : 'left';
         
-        // Trees along both sides - FAR from road, only AHEAD of car (not behind)
-        for (let z = carZ - 5; z > carZ - 75; z -= 16) {
+        // Trees along both sides - ahead AND behind car for full coverage
+        for (let z = carZ + 30; z > carZ - 75; z -= 14) {
             // Left side trees - far from road
             const leftTree = this.createTree(treeStyle);
             leftTree.position.set(carX - roadSide - 14 - Math.random() * 6, 0, z + Math.random() * 3);
@@ -1049,9 +1049,9 @@ class GameRenderer {
             this.sceneryObjects.push(rightTree);
         }
         
-        // Fences along both sides - extend from near car to well before intersection cross-roads
-        this.createFence(carX - roadSide - 6, carZ - 10, carZ - 60, 'left', fenceType);
-        this.createFence(carX + roadSide + 6, carZ - 10, carZ - 60, 'right', fenceType);
+        // Fences along both sides - behind car through to ahead, stopping before intersection
+        this.createFence(carX - roadSide - 6, carZ + 25, carZ - 60, 'left', fenceType);
+        this.createFence(carX + roadSide + 6, carZ + 25, carZ - 60, 'right', fenceType);
         
         // Single barn on configured side - CLOSER to road for visibility
         const barn = this.createBarn();
@@ -1085,40 +1085,40 @@ class GameRenderer {
         this.scene.add(jmSign);
         this.sceneryObjects.push(jmSign);
         
-        // Additional scattered trees in fields - MINIMUM 40 from road center, only AHEAD
+        // Additional scattered trees in fields - both ahead and behind car
         for (let i = 0; i < treeCount; i++) {
             const tree = this.createTree(treeStyle);
             const side = Math.random() > 0.5 ? -1 : 1;
             tree.position.set(
                 carX + side * (34 + Math.random() * 24),
                 0,
-                carZ - 5 - Math.random() * 70 // Only ahead of car
+                carZ + 20 - Math.random() * 90 // Behind and ahead of car
             );
             this.scene.add(tree);
             this.sceneryObjects.push(tree);
         }
         
-        // Add bushes/shrubs - MINIMUM 30 from road center, only AHEAD
+        // Add bushes/shrubs - both ahead and behind car
         for (let i = 0; i < bushCount; i++) {
             const bush = this.createBush();
             const side = Math.random() > 0.5 ? -1 : 1;
             bush.position.set(
                 carX + side * (26 + Math.random() * 20),
                 0,
-                carZ - 5 - Math.random() * 55 // Only ahead
+                carZ + 15 - Math.random() * 70 // Behind and ahead
             );
             this.scene.add(bush);
             this.sceneryObjects.push(bush);
         }
         
-        // Add rocks scattered around - MINIMUM 25 from road center, only AHEAD
+        // Add rocks scattered around - both ahead and behind car
         for (let i = 0; i < rockCount; i++) {
             const rock = this.createRock();
             const side = Math.random() > 0.5 ? -1 : 1;
             rock.position.set(
                 carX + side * (22 + Math.random() * 24),
                 0,
-                carZ - 5 - Math.random() * 60 // Only ahead
+                carZ + 15 - Math.random() * 75 // Behind and ahead
             );
             this.scene.add(rock);
             this.sceneryObjects.push(rock);
@@ -1632,9 +1632,8 @@ class GameRenderer {
         const roadSide = this.ROAD_WIDTH / 2 + 8;
         const treeStyle = config.treeStyle;
         
-        // Trees along both sides - CLOSE to road like the first scene (~12-20 from road edge)
-        // Start at 15 so scenery is visible immediately after turn
-        for (let dist = 15; dist < 110; dist += 12) {
+        // Trees along both sides - cover behind (-20) through ahead (110) of car exit point
+        for (let dist = -20; dist < 110; dist += 12) {
             const baseX = carX - Math.sin(carRot) * dist;
             const baseZ = carZ - Math.cos(carRot) * dist;
             
@@ -1778,8 +1777,8 @@ class GameRenderer {
             const spacing = fenceType === 'long' ? 15 : 10;
             const fenceWidth = fenceType === 'long' ? 15 : 10;
             
-            // Place fences on both sides along the road — start close for seamless view
-            for (let dist = 18; dist < 120; dist += spacing) {
+            // Place fences on both sides — cover behind and ahead for seamless view
+            for (let dist = -15; dist < 120; dist += spacing) {
                 const baseX = carX - Math.sin(carRot) * dist;
                 const baseZ = carZ - Math.cos(carRot) * dist;
                 
