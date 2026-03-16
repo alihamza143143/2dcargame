@@ -777,11 +777,10 @@ class GameRenderer {
         this.createIntersectionFence(-junctionEdge - 40, -150, -roadSide - 6, 'vertical-left');
         this.createIntersectionFence(-junctionEdge - 40, -150, roadSide + 6, 'vertical-right');
         
-        // === BACK ROAD FENCES (where car comes from) - only beyond the junction edge ===
-        // These run along Z axis from junctionEdge outward, on both sides of the back road
-        // They do NOT extend into the junction area, so left/right cross-roads stay open
-        this.createIntersectionFence(junctionEdge + 40, 80, -roadSide - 6, 'vertical-left');
-        this.createIntersectionFence(junctionEdge + 40, 80, roadSide + 6, 'vertical-right');
+        // === BACK ROAD FENCES (where car comes from) - start far from junction to clear cross-roads
+        // These run along Z axis from well past the junction outward
+        this.createIntersectionFence(junctionEdge + 50, 120, -roadSide - 6, 'vertical-left');
+        this.createIntersectionFence(junctionEdge + 50, 120, roadSide + 6, 'vertical-right');
         
         // === BARNS near intersection - one barn far from road, removed rotation since PlaneGeometry needs to face camera ===
         const barn1 = this.createBarn();
@@ -1036,7 +1035,7 @@ class GameRenderer {
         const barnSide = config ? config.barnSide : 'left';
         
         // Trees along both sides - FAR from road, only AHEAD of car (not behind)
-        for (let z = carZ - 10; z > carZ - 70; z -= 20) {
+        for (let z = carZ - 5; z > carZ - 75; z -= 16) {
             // Left side trees - far from road
             const leftTree = this.createTree(treeStyle);
             leftTree.position.set(carX - roadSide - 14 - Math.random() * 6, 0, z + Math.random() * 3);
@@ -1050,9 +1049,9 @@ class GameRenderer {
             this.sceneryObjects.push(rightTree);
         }
         
-        // Fences along both sides - STOP before intersection so cross-road openings are clear
-        this.createFence(carX - roadSide - 6, carZ - 25, carZ - 55, 'left', fenceType);
-        this.createFence(carX + roadSide + 6, carZ - 25, carZ - 55, 'right', fenceType);
+        // Fences along both sides - extend from near car to well before intersection cross-roads
+        this.createFence(carX - roadSide - 6, carZ - 10, carZ - 60, 'left', fenceType);
+        this.createFence(carX + roadSide + 6, carZ - 10, carZ - 60, 'right', fenceType);
         
         // Single barn on configured side - CLOSER to road for visibility
         const barn = this.createBarn();
@@ -1093,7 +1092,7 @@ class GameRenderer {
             tree.position.set(
                 carX + side * (34 + Math.random() * 24),
                 0,
-                carZ - 10 - Math.random() * 60 // Only ahead of car
+                carZ - 5 - Math.random() * 70 // Only ahead of car
             );
             this.scene.add(tree);
             this.sceneryObjects.push(tree);
@@ -1634,8 +1633,8 @@ class GameRenderer {
         const treeStyle = config.treeStyle;
         
         // Trees along both sides - CLOSE to road like the first scene (~12-20 from road edge)
-        // Start at 30 to clear the intersection area
-        for (let dist = 30; dist < 100; dist += 12) {
+        // Start at 15 so scenery is visible immediately after turn
+        for (let dist = 15; dist < 110; dist += 12) {
             const baseX = carX - Math.sin(carRot) * dist;
             const baseZ = carZ - Math.cos(carRot) * dist;
             
@@ -1779,8 +1778,8 @@ class GameRenderer {
             const spacing = fenceType === 'long' ? 15 : 10;
             const fenceWidth = fenceType === 'long' ? 15 : 10;
             
-            // Place fences on both sides along the road — start past intersection area
-            for (let dist = 40; dist < 120; dist += spacing) {
+            // Place fences on both sides along the road — start close for seamless view
+            for (let dist = 18; dist < 120; dist += spacing) {
                 const baseX = carX - Math.sin(carRot) * dist;
                 const baseZ = carZ - Math.cos(carRot) * dist;
                 
