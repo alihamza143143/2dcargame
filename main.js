@@ -265,30 +265,25 @@ class GameController {
         this.currentScenario = 0;
         this.score = 0;
         this.answers = [];
-
-        const launchGame = () => {
-            this.showScreen('hud');
-            this.updateProgressDots();
-            gameRenderer.showNextIntersection();
-            gameRenderer.onStopAtIntersection = () => {
-                this.showScenario();
-            };
-            gameRenderer.startDriving();
-            setTimeout(() => {
-                gameRenderer.approachIntersection();
-            }, 1500);
+        
+        this.showScreen('hud');
+        this.updateProgressDots();
+        
+        // Make sure intersection is positioned and visible
+        gameRenderer.showNextIntersection();
+        
+        // Set up callback for when car stops
+        gameRenderer.onStopAtIntersection = () => {
+            this.showScenario();
         };
-
-        if (gameRenderer.sceneReady) {
-            launchGame();
-        } else {
-            const waitForScene = setInterval(() => {
-                if (gameRenderer.sceneReady) {
-                    clearInterval(waitForScene);
-                    launchGame();
-                }
-            }, 100);
-        }
+        
+        // Start driving toward the visible intersection
+        gameRenderer.startDriving();
+        
+        // After driving a bit, start approaching (slowing down)
+        setTimeout(() => {
+            gameRenderer.approachIntersection();
+        }, 1500);
     }
     
     updateProgressDots() {
@@ -426,11 +421,12 @@ class GameController {
             }, 500);
             this.isTransitioning = false;
         } else {
-            // Show intersection immediately so it's always visible, slow down after a stretch
-            gameRenderer.showNextIntersection();
+            // Car is now driving on new road segment
+            // Show next intersection ahead after a comfortable driving stretch
             setTimeout(() => {
+                gameRenderer.showNextIntersection();
                 gameRenderer.approachIntersection();
-            }, 2000);
+            }, 3500);
             // onStopAtIntersection callback will show the scenario
             this.isTransitioning = false;
         }

@@ -165,7 +165,7 @@ class GameRenderer {
                     texture.magFilter = THREE.LinearFilter;
                     texture.premultiplyAlpha = false;
                     this.textures[key] = texture;
-                    // texture loaded
+                    console.log(`Loaded texture: ${key}`);
                     resolve();
                 }, undefined, (err) => {
                     console.warn(`Failed to load texture: ${path}`, err);
@@ -199,13 +199,10 @@ class GameRenderer {
         
             this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1500);
             
-            this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
-            const pixelRatio = Math.min(window.devicePixelRatio || 1, this.isMobile ? 1.5 : 2);
-            this.renderer = new THREE.WebGLRenderer({ antialias: !this.isMobile, powerPreference: 'high-performance', alpha: false, stencil: false });
-            this.renderer.setPixelRatio(pixelRatio);
+            this.renderer = new THREE.WebGLRenderer({ antialias: true });
             this.renderer.setSize(window.innerWidth, window.innerHeight);
-            this.renderer.shadowMap.enabled = !this.isMobile;
-            this.renderer.shadowMap.type = this.isMobile ? THREE.BasicShadowMap : THREE.PCFSoftShadowMap;
+            this.renderer.shadowMap.enabled = true;
+            this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             // No tone mapping — preserves original vibrant colors without foggy/smoky wash
             this.renderer.toneMapping = THREE.NoToneMapping;
             this.renderer.toneMappingExposure = 1.0;
@@ -223,7 +220,6 @@ class GameRenderer {
             this.positionIntersectionAhead();
             
             this.updateCamera(true);
-            this.sceneReady = true;
             this.animate();
             
             window.addEventListener('resize', () => this.onResize());
@@ -756,8 +752,12 @@ class GameRenderer {
         this.createIntersectionFence(-junctionEdge - 40, -150, -roadSide - 6, 'vertical-left');
         this.createIntersectionFence(-junctionEdge - 40, -150, roadSide + 6, 'vertical-right');
         
-        // No back road fences — keeps the junction area clean and cross-roads visible
-
+        // === BACK ROAD FENCES (where car comes from) - only beyond the junction edge ===
+        // These run along Z axis from junctionEdge outward, on both sides of the back road
+        // They do NOT extend into the junction area, so left/right cross-roads stay open
+        this.createIntersectionFence(junctionEdge + 40, 80, -roadSide - 6, 'vertical-left');
+        this.createIntersectionFence(junctionEdge + 40, 80, roadSide + 6, 'vertical-right');
+        
         // === BARNS near intersection - one barn far from road, removed rotation since PlaneGeometry needs to face camera ===
         const barn1 = this.createBarn();
         barn1.position.set(-70, 0, -50);
@@ -1025,9 +1025,9 @@ class GameRenderer {
             this.sceneryObjects.push(rightTree);
         }
         
-        // Fences along both sides - short stretch, well before intersection
-        this.createFence(carX - roadSide - 6, carZ - 10, carZ - 30, 'left', fenceType);
-        this.createFence(carX + roadSide + 6, carZ - 10, carZ - 30, 'right', fenceType);
+        // Fences along both sides - STOP before intersection so cross-road openings are clear
+        this.createFence(carX - roadSide - 6, carZ - 25, carZ - 55, 'left', fenceType);
+        this.createFence(carX + roadSide + 6, carZ - 25, carZ - 55, 'right', fenceType);
         
         // Single barn on configured side - CLOSER to road for visibility
         const barn = this.createBarn();
@@ -1515,7 +1515,6 @@ class GameRenderer {
     }
     
     positionIntersectionAhead() {
-        if (!this.car || !this.intersectionGroup) return;
         const dist = this.INTERSECTION_DISTANCE;
         const ix = this.car.position.x - Math.sin(this.car.rotation.y) * dist;
         const iz = this.car.position.z - Math.cos(this.car.rotation.y) * dist;
@@ -1540,7 +1539,7 @@ class GameRenderer {
             this.hillGroup.position.set(this.car.position.x, 0, this.car.position.z);
         }
         if (this.ground) {
-            this.ground.position.set(this.car.position.x, -1.1, this.car.position.z);
+            this.ground.position.set(this.car.position.x, -0.1, this.car.position.z);
         }
         
         // Only create scenery if not already created for this road segment
@@ -2651,7 +2650,6 @@ class GameRenderer {
     // === PUBLIC API ===
     
     startDriving() {
-        if (!this.sceneReady) return;
         this.setState('DRIVING');
         this.targetCarSpeed = 16;
     }
@@ -2778,7 +2776,7 @@ class GameRenderer {
         
         // Update ground and hills immediately
         if (this.ground) {
-            this.ground.position.set(this.car.position.x, -1.1, this.car.position.z);
+            this.ground.position.set(this.car.position.x, -0.1, this.car.position.z);
         }
         if (this.hillGroup) {
             // 360° panorama ring: center on car, NO rotation
@@ -2795,7 +2793,6 @@ class GameRenderer {
     }
     
     showNextIntersection() {
-        if (!this.sceneReady) return;
         this.positionIntersectionAhead();
     }
     
@@ -3020,14 +3017,9 @@ class GameRenderer {
     }
     
     onResize() {
-        if (this._resizeTimeout) clearTimeout(this._resizeTimeout);
-        this._resizeTimeout = setTimeout(() => {
-            const pixelRatio = Math.min(window.devicePixelRatio || 1, this.isMobile ? 1.5 : 2);
-            this.camera.aspect = window.innerWidth / window.innerHeight;
-            this.camera.updateProjectionMatrix();
-            this.renderer.setPixelRatio(pixelRatio);
-            this.renderer.setSize(window.innerWidth, window.innerHeight);
-        }, 150);
+        this.camera.aspect = window.innerWidth / window.innerHeight;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
     }
 }
 
