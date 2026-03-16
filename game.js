@@ -516,30 +516,36 @@ class GameRenderer {
         const roadLength = 600;
         const roadGeo = new THREE.PlaneGeometry(this.ROAD_WIDTH, roadLength);
         const road = new THREE.Mesh(roadGeo, roadMat);
+        // Use polygonOffset to prevent Z-fighting between road layers
+        roadMat.polygonOffset = true;
+        roadMat.polygonOffsetFactor = 2;
+        roadMat.polygonOffsetUnits = 2;
+
         road.rotation.x = -Math.PI / 2;
         road.position.set(0, 0.05, 0);
         road.receiveShadow = true;
         this.roadGroup.add(road);
-        
-        // Center yellow dashed line - raised higher
+
+        // Center yellow dashed line
+        lineMat.depthTest = true;
         for (let z = roadLength / 2; z > -roadLength / 2; z -= 10) {
             const dashGeo = new THREE.PlaneGeometry(0.25, 5);
             const dash = new THREE.Mesh(dashGeo, lineMat);
             dash.rotation.x = -Math.PI / 2;
-            dash.position.set(0, 0.08, z);
+            dash.position.set(0, 0.12, z);
             this.roadGroup.add(dash);
         }
-        
-        // White edge lines - raised higher
+
+        // White edge lines
         const edgeGeo = new THREE.PlaneGeometry(0.3, roadLength);
         const leftEdge = new THREE.Mesh(edgeGeo, edgeMat);
         leftEdge.rotation.x = -Math.PI / 2;
-        leftEdge.position.set(-this.ROAD_WIDTH / 2 + 0.2, 0.08, 0);
+        leftEdge.position.set(-this.ROAD_WIDTH / 2 + 0.2, 0.12, 0);
         this.roadGroup.add(leftEdge);
-        
+
         const rightEdge = new THREE.Mesh(edgeGeo, edgeMat);
         rightEdge.rotation.x = -Math.PI / 2;
-        rightEdge.position.set(this.ROAD_WIDTH / 2 - 0.2, 0.08, 0);
+        rightEdge.position.set(this.ROAD_WIDTH / 2 - 0.2, 0.12, 0);
         this.roadGroup.add(rightEdge);
         
         this.scene.add(this.roadGroup);
@@ -577,51 +583,56 @@ class GameRenderer {
         const edgeMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
         
         // === INTERSECTION CENTER (crossroads) ===
+        // Use polygonOffset on intersection road material to prevent Z-fighting
+        roadMat.polygonOffset = true;
+        roadMat.polygonOffsetFactor = 2;
+        roadMat.polygonOffsetUnits = 2;
+
         const junctionSize = this.ROAD_WIDTH * 2.5;
         const junctionGeo = new THREE.PlaneGeometry(junctionSize, junctionSize);
         const junction = new THREE.Mesh(junctionGeo, roadMat);
         junction.rotation.x = -Math.PI / 2;
-        junction.position.set(0, 0.06, 0);
+        junction.position.set(0, 0.08, 0);
         junction.receiveShadow = true;
         this.intersectionGroup.add(junction);
-        
+
         // === CONNECTED ROADS WITH MARKINGS ===
         const sideRoadLength = 200;
         const junctionEdge = junctionSize / 2;
-        
+
         // LEFT ROAD
         const leftRoadGeo = new THREE.PlaneGeometry(this.ROAD_WIDTH, sideRoadLength);
         const leftRoad = new THREE.Mesh(leftRoadGeo, roadMat);
         leftRoad.rotation.x = -Math.PI / 2;
         leftRoad.rotation.z = Math.PI / 2;
-        leftRoad.position.set(-junctionEdge - sideRoadLength / 2, 0.04, 0);
+        leftRoad.position.set(-junctionEdge - sideRoadLength / 2, 0.07, 0);
         leftRoad.receiveShadow = true;
         this.intersectionGroup.add(leftRoad);
-        
+
         // Left road markings - yellow center dashes
         for (let x = -junctionEdge - 15; x > -junctionEdge - sideRoadLength; x -= 10) {
             const dashGeo = new THREE.PlaneGeometry(5, 0.25);
             const dash = new THREE.Mesh(dashGeo, lineMat);
             dash.rotation.x = -Math.PI / 2;
-            dash.position.set(x, 0.08, 0);
+            dash.position.set(x, 0.14, 0);
             this.intersectionGroup.add(dash);
         }
         // Left road white edges
         const leftEdgeGeo = new THREE.PlaneGeometry(sideRoadLength, 0.3);
         const leftEdgeTop = new THREE.Mesh(leftEdgeGeo, edgeMat);
         leftEdgeTop.rotation.x = -Math.PI / 2;
-        leftEdgeTop.position.set(-junctionEdge - sideRoadLength / 2, 0.08, -this.ROAD_WIDTH / 2 + 0.2);
+        leftEdgeTop.position.set(-junctionEdge - sideRoadLength / 2, 0.14, -this.ROAD_WIDTH / 2 + 0.2);
         this.intersectionGroup.add(leftEdgeTop);
         const leftEdgeBottom = new THREE.Mesh(leftEdgeGeo, edgeMat);
         leftEdgeBottom.rotation.x = -Math.PI / 2;
-        leftEdgeBottom.position.set(-junctionEdge - sideRoadLength / 2, 0.08, this.ROAD_WIDTH / 2 - 0.2);
+        leftEdgeBottom.position.set(-junctionEdge - sideRoadLength / 2, 0.14, this.ROAD_WIDTH / 2 - 0.2);
         this.intersectionGroup.add(leftEdgeBottom);
-        
+
         // RIGHT ROAD
         const rightRoad = new THREE.Mesh(leftRoadGeo, roadMat);
         rightRoad.rotation.x = -Math.PI / 2;
         rightRoad.rotation.z = Math.PI / 2;
-        rightRoad.position.set(junctionEdge + sideRoadLength / 2, 0.04, 0);
+        rightRoad.position.set(junctionEdge + sideRoadLength / 2, 0.07, 0);
         rightRoad.receiveShadow = true;
         this.intersectionGroup.add(rightRoad);
         
@@ -630,69 +641,69 @@ class GameRenderer {
             const dashGeo = new THREE.PlaneGeometry(5, 0.25);
             const dash = new THREE.Mesh(dashGeo, lineMat);
             dash.rotation.x = -Math.PI / 2;
-            dash.position.set(x, 0.08, 0);
+            dash.position.set(x, 0.14, 0);
             this.intersectionGroup.add(dash);
         }
         // Right road white edges
         const rightEdgeTop = new THREE.Mesh(leftEdgeGeo, edgeMat);
         rightEdgeTop.rotation.x = -Math.PI / 2;
-        rightEdgeTop.position.set(junctionEdge + sideRoadLength / 2, 0.08, -this.ROAD_WIDTH / 2 + 0.2);
+        rightEdgeTop.position.set(junctionEdge + sideRoadLength / 2, 0.14, -this.ROAD_WIDTH / 2 + 0.2);
         this.intersectionGroup.add(rightEdgeTop);
         const rightEdgeBottom = new THREE.Mesh(leftEdgeGeo, edgeMat);
         rightEdgeBottom.rotation.x = -Math.PI / 2;
-        rightEdgeBottom.position.set(junctionEdge + sideRoadLength / 2, 0.08, this.ROAD_WIDTH / 2 - 0.2);
+        rightEdgeBottom.position.set(junctionEdge + sideRoadLength / 2, 0.14, this.ROAD_WIDTH / 2 - 0.2);
         this.intersectionGroup.add(rightEdgeBottom);
-        
+
         // STRAIGHT ROAD (ahead)
         const straightRoadGeo = new THREE.PlaneGeometry(this.ROAD_WIDTH, sideRoadLength);
         const straightRoad = new THREE.Mesh(straightRoadGeo, roadMat);
         straightRoad.rotation.x = -Math.PI / 2;
-        straightRoad.position.set(0, 0.04, -junctionEdge - sideRoadLength / 2);
+        straightRoad.position.set(0, 0.07, -junctionEdge - sideRoadLength / 2);
         straightRoad.receiveShadow = true;
         this.intersectionGroup.add(straightRoad);
-        
+
         // Straight road markings - yellow center dashes
         for (let z = -junctionEdge - 15; z > -junctionEdge - sideRoadLength; z -= 10) {
             const dashGeo = new THREE.PlaneGeometry(0.25, 5);
             const dash = new THREE.Mesh(dashGeo, lineMat);
             dash.rotation.x = -Math.PI / 2;
-            dash.position.set(0, 0.08, z);
+            dash.position.set(0, 0.14, z);
             this.intersectionGroup.add(dash);
         }
         // Straight road white edges
         const straightEdgeGeo = new THREE.PlaneGeometry(0.3, sideRoadLength);
         const straightEdgeLeft = new THREE.Mesh(straightEdgeGeo, edgeMat);
         straightEdgeLeft.rotation.x = -Math.PI / 2;
-        straightEdgeLeft.position.set(-this.ROAD_WIDTH / 2 + 0.2, 0.08, -junctionEdge - sideRoadLength / 2);
+        straightEdgeLeft.position.set(-this.ROAD_WIDTH / 2 + 0.2, 0.14, -junctionEdge - sideRoadLength / 2);
         this.intersectionGroup.add(straightEdgeLeft);
         const straightEdgeRight = new THREE.Mesh(straightEdgeGeo, edgeMat);
         straightEdgeRight.rotation.x = -Math.PI / 2;
-        straightEdgeRight.position.set(this.ROAD_WIDTH / 2 - 0.2, 0.08, -junctionEdge - sideRoadLength / 2);
+        straightEdgeRight.position.set(this.ROAD_WIDTH / 2 - 0.2, 0.14, -junctionEdge - sideRoadLength / 2);
         this.intersectionGroup.add(straightEdgeRight);
-        
+
         // BACK ROAD (where car comes from)
         const backRoad = new THREE.Mesh(straightRoadGeo, roadMat);
         backRoad.rotation.x = -Math.PI / 2;
-        backRoad.position.set(0, 0.04, junctionEdge + sideRoadLength / 2);
+        backRoad.position.set(0, 0.07, junctionEdge + sideRoadLength / 2);
         backRoad.receiveShadow = true;
         this.intersectionGroup.add(backRoad);
-        
+
         // Back road markings - yellow center dashes
         for (let z = junctionEdge + 15; z < junctionEdge + sideRoadLength; z += 10) {
             const dashGeo = new THREE.PlaneGeometry(0.25, 5);
             const dash = new THREE.Mesh(dashGeo, lineMat);
             dash.rotation.x = -Math.PI / 2;
-            dash.position.set(0, 0.08, z);
+            dash.position.set(0, 0.14, z);
             this.intersectionGroup.add(dash);
         }
         // Back road white edges
         const backEdgeLeft = new THREE.Mesh(straightEdgeGeo, edgeMat);
         backEdgeLeft.rotation.x = -Math.PI / 2;
-        backEdgeLeft.position.set(-this.ROAD_WIDTH / 2 + 0.2, 0.08, junctionEdge + sideRoadLength / 2);
+        backEdgeLeft.position.set(-this.ROAD_WIDTH / 2 + 0.2, 0.14, junctionEdge + sideRoadLength / 2);
         this.intersectionGroup.add(backEdgeLeft);
         const backEdgeRight = new THREE.Mesh(straightEdgeGeo, edgeMat);
         backEdgeRight.rotation.x = -Math.PI / 2;
-        backEdgeRight.position.set(this.ROAD_WIDTH / 2 - 0.2, 0.08, junctionEdge + sideRoadLength / 2);
+        backEdgeRight.position.set(this.ROAD_WIDTH / 2 - 0.2, 0.14, junctionEdge + sideRoadLength / 2);
         this.intersectionGroup.add(backEdgeRight);
         
         // === ADD SCENERY TO INTERSECTION ROADS ===
