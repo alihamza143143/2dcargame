@@ -26,8 +26,8 @@ class GameRenderer {
         this.carSpeed = 0;
         this.targetCarSpeed = 0;
         
-        // Camera settings
-        this.cameraOffset = { y: 5, z: 14 };
+        // Camera settings (z = distance behind car, y = height)
+        this.cameraOffset = { y: 5, z: 14 }; // adjusted in init() for mobile
         
         // Animation
         this.clock = new THREE.Clock();
@@ -198,12 +198,17 @@ class GameRenderer {
             // Set scene background to match sky horizon color (prevents black)
             this.scene.background = new THREE.Color(0x87CEEB);
 
-            // Push fog very far back — only for blending distant objects, not for atmosphere
-            this.scene.fog = new THREE.Fog(0xA8D8EA, 600, 1200);
+            // Fog — closer on mobile to cull distant objects early
+            this.scene.fog = new THREE.Fog(0xA8D8EA, this.isMobile ? 200 : 600, this.isMobile ? 500 : 1200);
 
-            // Wider FOV on mobile so the view matches desktop (prevents zoomed-in look)
-            const fov = this.isMobile ? 72 : 60;
-            this.camera = new THREE.PerspectiveCamera(fov, window.innerWidth / window.innerHeight, 0.1, 1500);
+            // Wider FOV + pulled-back camera on mobile so view isn't zoomed in
+            const fov = this.isMobile ? 78 : 60;
+            this.camera = new THREE.PerspectiveCamera(fov, window.innerWidth / window.innerHeight, 0.5, this.isMobile ? 800 : 1500);
+
+            // Pull camera back on mobile so it's less zoomed in
+            if (this.isMobile) {
+                this.cameraOffset = { y: 6, z: 17 };
+            }
 
             const dpr = Math.min(window.devicePixelRatio || 1, this.isMobile ? 1 : 2);
 
@@ -337,32 +342,35 @@ class GameRenderer {
     
     createGround() {
         // Create flat solid grass matching 2D illustrated style
+        const texSize = this.isMobile ? 128 : 512;
         const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 512;
+        canvas.width = texSize;
+        canvas.height = texSize;
         const ctx = canvas.getContext('2d');
-        
+
         // Solid muted green like screenshot - flat illustrated look
         ctx.fillStyle = '#6B8E50';
-        ctx.fillRect(0, 0, 512, 512);
-        
+        ctx.fillRect(0, 0, texSize, texSize);
+
         // Very subtle variation for depth - keep it minimal
-        for (let i = 0; i < 500; i++) {
-            const x = Math.random() * 512;
-            const y = Math.random() * 512;
+        const dots = this.isMobile ? 100 : 500;
+        for (let i = 0; i < dots; i++) {
+            const x = Math.random() * texSize;
+            const y = Math.random() * texSize;
             ctx.globalAlpha = 0.3;
             ctx.fillStyle = Math.random() > 0.5 ? '#5E8045' : '#78995A';
             ctx.fillRect(x, y, 2 + Math.random() * 3, 2 + Math.random() * 3);
         }
         ctx.globalAlpha = 1;
-        
+
         const grassTexture = new THREE.CanvasTexture(canvas);
         grassTexture.wrapS = THREE.RepeatWrapping;
         grassTexture.wrapT = THREE.RepeatWrapping;
-        grassTexture.repeat.set(50, 50);
+        grassTexture.repeat.set(this.isMobile ? 30 : 50, this.isMobile ? 30 : 50);
         
-        // Large ground plane - flat solid green like 2D illustration
-        const groundGeo = new THREE.PlaneGeometry(2000, 2000);
+        // Ground plane — smaller on mobile to reduce fill rate
+        const groundSize = this.isMobile ? 1000 : 2000;
+        const groundGeo = new THREE.PlaneGeometry(groundSize, groundSize);
         const groundMat = new THREE.MeshLambertMaterial({ 
             map: grassTexture,
             color: 0x6B8E50  // Muted meadow green matching screenshot
@@ -495,7 +503,8 @@ class GameRenderer {
         aCtx.fillRect(0, 0, 256, 256);
         
         // Add gravel/texture noise
-        for (let i = 0; i < 2000; i++) {
+        const gravel = this.isMobile ? 500 : 2000;
+        for (let i = 0; i < gravel; i++) {
             const x = Math.random() * 256;
             const y = Math.random() * 256;
             const shade = Math.random();
@@ -529,7 +538,8 @@ class GameRenderer {
         this.roadGroup.add(road);
         
         // Center yellow dashed line - raised higher
-        for (let z = roadLength / 2; z > -roadLength / 2; z -= 10) {
+        const dashStep = this.isMobile ? 20 : 10;
+        for (let z = roadLength / 2; z > -roadLength / 2; z -= dashStep) {
             const dashGeo = new THREE.PlaneGeometry(0.25, 5);
             const dash = new THREE.Mesh(dashGeo, lineMat);
             dash.rotation.x = -Math.PI / 2;
@@ -3045,7 +3055,9 @@ class GameRenderer {
         this._rt = setTimeout(() => {
             this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
             const dpr = Math.min(window.devicePixelRatio || 1, this.isMobile ? 1 : 2);
-            this.camera.fov = this.isMobile ? 72 : 60;
+            this.camera.fov = this.isMobile ? 78 : 60;
+            this.camera.far = this.isMobile ? 800 : 1500;
+            this.cameraOffset = this.isMobile ? { y: 6, z: 17 } : { y: 5, z: 14 };
             this.camera.aspect = window.innerWidth / window.innerHeight;
             this.camera.updateProjectionMatrix();
             this.renderer.setPixelRatio(dpr);
